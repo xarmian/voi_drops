@@ -1,0 +1,17 @@
+{
+  "name": "reward_drop",
+  "version": "1.0.0",
+  "description": "Reward airdrop script for block proposers",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "type": "module",
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "algosdk": "^2.4.0",
+    "fast-csv": "^4.3.6",
+    "minimist": "^1.2.8"
+  }
+}
