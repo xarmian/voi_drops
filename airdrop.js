@@ -1,8 +1,10 @@
 /*
 	Script to perform airdrops to accounts utilizing CSV file as data source
+    mnemonic can be passed with an optional -m parameter, or set as the environment variable MNEMONIC
+
     WORK IN PROGRESS DO NOT USE AS-IS
 
-	Usage: node airdrop.js -f <filename>
+	Usage: node airdrop.js -a <acctlist> -b <blacklist> [-m "mnemonic"]
 */
 
 import algosdk from 'algosdk';
@@ -10,14 +12,7 @@ import fs from 'fs';
 import minimist from 'minimist';
 import csv from 'fast-csv';
 
-// TODO: Move to an external file
-const blacklist = []; // list of addresses to not send to
-
-// TODO: Move to environment variable or external file
-const sender = {
-    addr: 'YOUR-SENDER-ADDRESS',
-    sk: 'YOUR-SENDER-SECRET-KEY'
-};
+const algodClient = new algosdk.Algodv2("", "https://testnet-api.algonode.cloud", "");
 
 /* ***********************************
    ********* Extractable *************
@@ -30,7 +25,7 @@ const sleep = async (ms) => {
 // show help menu and exit
 const exitMenu = (err) => {
 	if (err) console.log(`ERROR: ${err}`);
-	console.log(`Command: node airdrop.js -f <acctsfile>`);
+	console.log(`Command: node airdrop.js -a <acctlist> -b <blacklist> [-m "mnemonic of sender"]`);
 	process.exit();
 }
 
@@ -39,8 +34,9 @@ const validateFile = async (file) => {
 	return true;
 }
 
-// iterate over dropList. add addresses to array. if duplicate found remove from array and add address to errorList. return errorList
-const removeAndTrackDuplicates = (array) => {
+// iterate over dropList. add addresses to array. if duplicate or invalid address found remove from array and add address to errorList
+// return errorList
+const removeAndTrackDuplicates = (array, blacklist) => {
     let errorList = [];
     let accountMap = new Map();
 
@@ -60,10 +56,33 @@ const removeAndTrackDuplicates = (array) => {
     return [ array, errorList ];
 }
 
-function getFilenameArgument() {
+const removeInvalidAddresses = (array, errorList) => {
+    for (let objid in array) {
+        if (!algosdk.isValidAddress(array[objid].account)) {
+            errorList.push({...array[objid], error: 'invalid address'});
+            array.splice(objid,1);
+        }
+    }
+
+    return [ array, errorList ];
+}
+
+// remove blacklisted addresses from airdrop array. "array" is 
+const sanitizeWithBlacklist = (array, blacklist) => {
+    let blacklistObj = {};
+    for (let obj of blacklist) {
+        blacklistObj[obj.account] = 1;
+    }
+    array = array.filter(obj => blacklistObj[obj.account] !== 1);
+    return array;
+}
+
+function getFilenameArguments() {
     const args = minimist(process.argv.slice(2));
-    let acctList = args.f;
-    return acctList;
+    let acctList = (args.a)??=null;
+    let blackList = (args.b)??=null;
+    let mnemonic = (args.m)??=null;
+    return [ acctList, blackList, mnemonic ];
 }
 
 async function csvToJson(filename) {
@@ -81,7 +100,7 @@ async function csvToJson(filename) {
     });
 }
 
-async function transferTokens(array) {
+async function transferTokens(sender,array) {
     let successList = [];
     let errorList = [];
     const params = await algodClient.getTransactionParams().do();
@@ -96,16 +115,16 @@ async function transferTokens(array) {
             "from": sender.addr,
             "to": obj.account,
             "fee": params.fee,
-            "firstRound": params.lastRound,
-            "lastRound": params.lastRound + 1000,
+            "firstRound": params.firstRound,
+            "lastRound": params.lastRound,
             "note": algosdk.encodeObj({ 'userType': obj.userType }),
-            "amount": obj.tokenAmount,
+            "amount": parseInt(obj.tokenAmount),
             "genesisID": params.genesisID,
-            "genesisHash": params.genesishashb64
+            "genesisHash": params.genesisHash
         };
 
         let signedTxn = algosdk.signTransaction(txn, sender.sk);
-        let txId = signedTxn.txID().toString();
+        const txId = signedTxn.txID
 
         try {
             await algodClient.sendRawTransaction(signedTxn.blob).do();
@@ -115,12 +134,12 @@ async function transferTokens(array) {
                 successList.push(obj);
             }
         } catch (error) {
-            obj.error = error.description;
+            obj.error = error.response.body.message;
             errorList.push(obj);
         }
     }
 
-    return { successList, errorList };
+    return [ successList, errorList ];
 }
 
 async function waitForConfirmation(algodClient, txId, timeout) {
@@ -139,30 +158,45 @@ async function waitForConfirmation(algodClient, txId, timeout) {
 /* ******* End Extractable ********/
 /* ******* START SCRIPT ***********/
 
-let acctFileName = getFilenameArgument();
-
-/* ***********************************
-   ********* Validation **************
-   ***********************************
-*/ 
-
-if (acctFileName == null || acctFileName == false) exitMenu('Invalid command line arguments');
-
-if (!fs.existsSync(acctFileName)) {
-	exitMenu('Account file missing or invalid');
-}
-
-if (!validateFile(acctFileName)) {
-	console.log('Accounts file invalid');
-}
-
-const algodClient = new algosdk.Algodv2("", "https://testnet-api.algonode.cloud", "");
-
 (async () => {
-	const origDropList = await csvToJson(acctFileName);
-	const [ finalDropList, errorDropList ] = removeAndTrackDuplicates(origDropList);
+    let [ acctFileName, blacklistFileName, paramMnemonic ] = getFilenameArguments();
 
-	await transferTokens(finalDropList);
+    // handle accotFileName
+    if (acctFileName == null || acctFileName == false) exitMenu('Invalid command line arguments');
+    if (!fs.existsSync(acctFileName)) {
+        exitMenu('Account file missing or invalid');
+    }
+    
+    if (!validateFile(acctFileName)) {
+        exitMenu('Accounts file invalid');
+    }
+    
+    // handle blacklist
+    let blacklist = []; // list of addresses to not send to
+    if (blacklistFileName != null && blacklistFileName != false) {
+        if (fs.existsSync(blacklistFileName) && validateFile(blacklistFileName)) {
+            blacklist = await csvToJson(blacklistFileName);
+        }
+    }
+
+    // handle senderMnemonic
+    if (typeof process.env.MNEMONIC == 'undefined' && paramMnemonic == null) {
+        exitMenu('Sender Mnemonic must be specified using -m parameter or as environemnt variable MNEMONIC');
+    }
+
+    const sender = algosdk.mnemonicToSecretKey(paramMnemonic??=process.env.MNEMONIC);
+    const origDropList = sanitizeWithBlacklist(await csvToJson(acctFileName), blacklist);
+	let [ dropList, errorDropList ] = removeAndTrackDuplicates(origDropList);
+    [ dropList, errorDropList ] = removeInvalidAddresses(dropList, errorDropList);
+
+	const [ successList, errList ] = await transferTokens(sender,dropList);
+    errorDropList.concat(errList);
+
+    console.log('SUCCESS LIST:');
+    console.log(successList);
+
+    console.log('ERROR LIST:');
+    console.log(errorDropList);
 
 	process.exit();
 
