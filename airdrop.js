@@ -4,15 +4,22 @@
 
     WORK IN PROGRESS DO NOT USE AS-IS
 
-	Usage: node airdrop.js -a <acctlist> -b <blacklist> [-m "mnemonic"]
+	Usage: node airdrop.js -a <acctlist> [-b <blacklist>] [-g <group_size>] [-m "mnemonic"]
 */
 
 import algosdk from 'algosdk';
 import fs from 'fs';
 import minimist from 'minimist';
 import csv from 'fast-csv';
+import csvWriter from 'csv-writer';
 
 const algodClient = new algosdk.Algodv2("", "https://testnet-api.algonode.cloud", "");
+
+//const ws = fs.createWriteStream('successList.csv');
+//csv.writeToStream(ws, successDropList, { headers: false });
+
+//csv.writeToStream(ws, [ { x:1, y:2, z:3 } ], { headers: false, flags: 'a' });
+//process.exit();
 
 /* ***********************************
    ********* Extractable *************
@@ -25,7 +32,7 @@ const sleep = async (ms) => {
 // show help menu and exit
 const exitMenu = (err) => {
 	if (err) console.log(`ERROR: ${err}`);
-	console.log(`Command: node airdrop.js -a <acctlist> -b <blacklist> [-m "mnemonic of sender"]`);
+	console.log(`Command: node airdrop.js -a <acctlist> [-b <blacklist>] [-g <group_size>] [-m "mnemonic of sender"]`);
 	process.exit();
 }
 
@@ -68,7 +75,7 @@ const removeInvalidAddresses = (array, errorList) => {
 }
 
 // remove blacklisted addresses from airdrop array. "array" is 
-const sanitizeWithBlacklist = (array, blacklist) => {
+const sanitizeWithRemovals = (array, blacklist) => {
     let blacklistObj = {};
     for (let obj of blacklist) {
         blacklistObj[obj.account] = 1;
@@ -82,7 +89,9 @@ function getFilenameArguments() {
     let acctList = (args.a)??=null;
     let blackList = (args.b)??=null;
     let mnemonic = (args.m)??=null;
-    return [ acctList, blackList, mnemonic ];
+    let testMode = (args.t)??=false;
+    let groupSize = (args.g)??=1;
+    return [ acctList, blackList, mnemonic, testMode, groupSize ];
 }
 
 async function csvToJson(filename) {
@@ -100,45 +109,83 @@ async function csvToJson(filename) {
     });
 }
 
-async function transferTokens(sender,array) {
+// tries to write objects contained in `array` to `filename`
+// returns true on success, false on failure
+async function writeToCSV(array, filename) {
+    try {
+        if (array.length > 0) {
+            let headers = Object.keys(array[0]);
+            headers.forEach((h,i) => headers[i] = { id: h, title: h });
+
+            const writer = csvWriter.createObjectCsvWriter({
+                path: filename,
+                header: headers,
+                append: false,
+            });
+            await writer.writeRecords(array);
+        }
+        return true;
+    }
+    catch(err) {
+        return false;
+    }
+}
+
+async function transferTokens(sender,array, successStream, errorStream, groupSize) {
     let successList = [];
     let errorList = [];
     const params = await algodClient.getTransactionParams().do();
+    let txGroup = [];
+    let objInGroup = [];
 
     for (let i = 0; i < array.length; i++) {
-        if (i % 10 === 0) {
-            await sleep(1000);  // pause for a second after every 10 transactions
-        }
-
         let obj = array[i];
-        let txn = {
-            "from": sender.addr,
-            "to": obj.account,
-            "fee": params.fee,
-            "firstRound": params.firstRound,
-            "lastRound": params.lastRound,
-            "note": algosdk.encodeObj({ 'userType': obj.userType }),
-            "amount": parseInt(obj.tokenAmount),
-            "genesisID": params.genesisID,
-            "genesisHash": params.genesisHash
-        };
+        const txn = algosdk.makePaymentTxnWithSuggestedParams(sender.addr, obj.account, parseInt(obj.tokenAmount), undefined, algosdk.encodeObj({'userType': obj.userType}),params);
 
-        let signedTxn = algosdk.signTransaction(txn, sender.sk);
-        const txId = signedTxn.txID
+        txGroup.push(txn);
+        objInGroup.push(obj);
+
+        // if group isn't full and its not the last transaction, continue filling group
+        if (groupSize < 1) groupSize = 1;
+        if (txGroup.length < groupSize && i < (array.length-1)) continue;
+        
+        // assign group ID
+        algosdk.assignGroupID(txGroup);
+
+        // sign transactions
+        const signedTxns = [];
+        for (let tid in txGroup) {
+            let t = txGroup[tid];
+            objInGroup[tid].txId = t.txID().toString();
+            signedTxns.push(t.signTxn(sender.sk));
+        }
 
         try {
-            await algodClient.sendRawTransaction(signedTxn.blob).do();
-            let confirmedTxn = await waitForConfirmation(algodClient, txId, 4);
+            const { txId } = await algodClient.sendRawTransaction(signedTxns).do();
+            let confirmedTxn = await waitForConfirmation(algodClient, txId, 8);
             if (confirmedTxn) {
-                obj.txId = txId;
-                successList.push(obj);
+                for (let o of objInGroup) {
+                    //o['confirmed-round'] = confirmedTxn['confirmed-round'];
+                    successList.push(o);
+                    console.log(`Sent ${o.tokenAmount} to ${o.account}`);
+                }
+
+                //await writeToCSV(successList,'successList.csv');
+                await successStream.writeRecords(objInGroup);
             }
         } catch (error) {
-            obj.error = error.response.body.message;
-            errorList.push(obj);
-        }
-    }
+            for (let o of objInGroup) {
+                o.error = (error && error.response && error.response.body && error.response.body.message) ? error.response.body.message : error.toString().substring(0,40);
+                errorList.push(o);
+                console.log(`Error sending ${o.tokenAmount} to ${o.account}`);
+            }
 
+            await errorStream.writeRecords(objInGroup);
+        }
+
+        txGroup = [];
+        objInGroup = [];
+    }
     return [ successList, errorList ];
 }
 
@@ -159,7 +206,7 @@ async function waitForConfirmation(algodClient, txId, timeout) {
 /* ******* START SCRIPT ***********/
 
 (async () => {
-    let [ acctFileName, blacklistFileName, paramMnemonic ] = getFilenameArguments();
+    let [ acctFileName, blacklistFileName, paramMnemonic, testMode, groupSize ] = getFilenameArguments();
 
     // handle accotFileName
     if (acctFileName == null || acctFileName == false) exitMenu('Invalid command line arguments');
@@ -179,24 +226,53 @@ async function waitForConfirmation(algodClient, txId, timeout) {
         }
     }
 
+    let alreadySent = [];
+    let resume = false;
+    const successFileName = 'successFile.csv';
+    if (fs.existsSync(successFileName) && validateFile(successFileName)) {
+        resume = true;
+        alreadySent = await csvToJson(successFileName);
+    }
+
+    const removeList = blacklist.concat(alreadySent);
+
     // handle senderMnemonic
     if (typeof process.env.MNEMONIC == 'undefined' && paramMnemonic == null) {
         exitMenu('Sender Mnemonic must be specified using -m parameter or as environemnt variable MNEMONIC');
     }
 
     const sender = algosdk.mnemonicToSecretKey(paramMnemonic??=process.env.MNEMONIC);
-    const origDropList = sanitizeWithBlacklist(await csvToJson(acctFileName), blacklist);
+    const origDropList = sanitizeWithRemovals(await csvToJson(acctFileName), removeList);
 	let [ dropList, errorDropList ] = removeAndTrackDuplicates(origDropList);
     [ dropList, errorDropList ] = removeInvalidAddresses(dropList, errorDropList);
 
-	const [ successList, errList ] = await transferTokens(sender,dropList);
-    errorDropList.concat(errList);
+    // create success and error streams
+    let headersSuccess = Object.keys(dropList[0]);
+    headersSuccess.forEach((h,i) => headersSuccess[i] = { id: h, title: h });
 
-    console.log('SUCCESS LIST:');
-    console.log(successList);
+    const successStream = csvWriter.createObjectCsvWriter({
+        path: 'successFile.csv',
+        header: headersSuccess,
+        append: resume,
+    });
+
+    let headersError = Object.keys(errorDropList[0]);
+    headersError.forEach((h,i) => headersError[i] = { id: h, title: h });
+
+    const errorStream = csvWriter.createObjectCsvWriter({
+        path: 'errorFile.csv',
+        header: headersError,
+        append: resume,
+    });
+
+	const [ successDropList, errList ] = await transferTokens(sender,dropList, successStream, errorStream, groupSize);
+    errorDropList = errorDropList.concat(errList);
+
+    /*console.log('SUCCESS LIST:');
+    console.log(successDropList);
 
     console.log('ERROR LIST:');
-    console.log(errorDropList);
+    console.log(errorDropList);*/
 
 	process.exit();
 
