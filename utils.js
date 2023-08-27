@@ -1,6 +1,5 @@
 import algosdk from 'algosdk';
 import fs from 'fs';
-import minimist from 'minimist';
 import csv from 'fast-csv';
 import csvWriter from 'csv-writer';
 
@@ -61,16 +60,6 @@ export const sanitizeWithRemovals = (array, blacklist) => {
     }
     array = array.filter(obj => blacklistObj[obj.account] !== 1);
     return array;
-}
-
-export const getFilenameArguments = () => {
-    const args = minimist(process.argv.slice(2));
-    let acctList = (args.a)??=null;
-    let blackList = (args.b)??=null;
-    let mnemonic = (args.m)??=null;
-    let testMode = (args.t)??=false;
-    let groupSize = (args.g)??=1;
-    return [ acctList, blackList, mnemonic, testMode, groupSize ];
 }
 
 export const csvToJson = async (filename) => {

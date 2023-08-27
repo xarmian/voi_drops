@@ -18,10 +18,21 @@
 
 import algosdk from 'algosdk';
 import fs from 'fs';
+import minimist from 'minimist';
 import csvWriter from 'csv-writer';
-import { sleep, exitMenu, validateFile, removeAndTrackDuplicates, removeInvalidAddresses, sanitizeWithRemovals, getFilenameArguments, csvToJson } from './utils.js';
+import { sleep, exitMenu, validateFile, removeAndTrackDuplicates, removeInvalidAddresses, sanitizeWithRemovals, csvToJson } from './utils.js';
 
 const algodClient = new algosdk.Algodv2("", "https://testnet-api.algonode.cloud", "");
+
+const getFilenameArguments = () => {
+    const args = minimist(process.argv.slice(2));
+    let acctList = (args.a)??=null;
+    let blackList = (args.b)??=null;
+    let mnemonic = (args.m)??=null;
+    let testMode = (args.t)??=false;
+    let groupSize = (args.g)??=1;
+    return [ acctList, blackList, mnemonic, testMode, groupSize ];
+}
 
 const transferTokens = async (sender,array, successStream, errorStream, groupSize) => {
     let successList = [];
