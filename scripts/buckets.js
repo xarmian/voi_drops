@@ -6,6 +6,11 @@
 
 	Status: INCOMPLETE
 
+	Todo:
+		- Accept CLI parameter for maximum number of accounts
+		- Loop until reaching max account
+		- Write results to CSV
+
 */
 
 import algosdk from 'algosdk';
@@ -19,7 +24,7 @@ const indexerClient = new algosdk.Indexer("", "https://testnet-idx.algonode.clou
     let nextToken = null;
 
     do {
-        // Fetch accounts using the indexer (with a limit, e.g., 1000 accounts per request)
+        // Fetch accounts using the indexer (with a limit, e.g., 100 accounts per request)
         const response = await indexerClient.searchAccounts().limit(100).nextToken(nextToken).do();
 
         for (const account of response.accounts) {
