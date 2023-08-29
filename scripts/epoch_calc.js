@@ -13,11 +13,7 @@
 
 import algosdk from 'algosdk';
 import minimist from 'minimist';
-import { writeToCSV } from './utils.js';
-
-//const default_epoch_start = '2023-08-25T00:00:00';
-//const default_epoch_end = '2023-08-25T00:01:00';
-//const epoch_block_reward = 1000000;
+import { writeToCSV } from '../include/utils.js';
 
 const c = new algosdk.Algodv2("", "https://testnet-api.algonode.cloud", "");
 

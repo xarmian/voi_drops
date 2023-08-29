@@ -20,7 +20,7 @@ import algosdk from 'algosdk';
 import fs from 'fs';
 import minimist from 'minimist';
 import csvWriter from 'csv-writer';
-import { sleep, exitMenu, validateFile, removeAndTrackDuplicates, removeInvalidAddresses, sanitizeWithRemovals, csvToJson } from './utils.js';
+import { sleep, exitMenu, validateFile, removeAndTrackDuplicates, removeInvalidAddresses, sanitizeWithRemovals, csvToJson } from '../include/utils.js';
 
 const algodClient = new algosdk.Algodv2("", "https://testnet-api.algonode.cloud", "");
 

@@ -20,7 +20,6 @@ export const getFilenameArguments = () => {
 
 async function getClosestBlock(timestamp,lowerBound = 1) {
     let upperBound = (await c.status().do())['last-round'];
-    //let lowerBound = 1; // Start from block 1, adjust if you have a better starting point
 
     while (lowerBound <= upperBound) {
         const midPoint = Math.floor((upperBound + lowerBound) / 2);
