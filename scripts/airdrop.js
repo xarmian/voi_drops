@@ -44,6 +44,9 @@ const transferTokens = async (sender,array, successStream, errorStream, groupSiz
     for (let i = 0; i < array.length; i++) {
         let obj = array[i];
         const txn = algosdk.makePaymentTxnWithSuggestedParams(sender.addr, obj.account, parseInt(obj.tokenAmount), undefined, algosdk.encodeObj({'userType': obj.userType}),params);
+        // Using the receiver transaction as a lease
+        // This prevents the airdrop script from sending a rewards payment twice in a 1000 round range
+        txn.lease = algosdk.decodeAddress(obj.account).publicKey;
 
         txGroup.push(txn);
         objInGroup.push(obj);
