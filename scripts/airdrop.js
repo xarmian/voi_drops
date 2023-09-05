@@ -22,7 +22,7 @@ import minimist from 'minimist';
 import csvWriter from 'csv-writer';
 import { sleep, exitMenu, validateFile, removeAndTrackDuplicates, removeInvalidAddresses, sanitizeWithRemovals, csvToJson } from '../include/utils.js';
 
-const algodClient = new algosdk.Algodv2("", "https://testnet-api.algonode.cloud", "");
+const algodClient = new algosdk.Algodv2("", "https://testnet-api.voi.nodly.io", "");
 
 const getFilenameArguments = () => {
     const args = minimist(process.argv.slice(2));

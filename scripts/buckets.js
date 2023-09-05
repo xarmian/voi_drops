@@ -15,8 +15,8 @@
 
 import algosdk from 'algosdk';
 
-const c = new algosdk.Algodv2("", "https://testnet-api.algonode.cloud", "");
-const indexerClient = new algosdk.Indexer("", "https://testnet-idx.algonode.cloud", "");
+const c = new algosdk.Algodv2("", "https://testnet-api.voi.nodly.io", "");
+const indexerClient = new algosdk.Indexer("", "https://testnet-idx.voi.nodly.io", "");
 
 (async () => {
     let balancesList = {};

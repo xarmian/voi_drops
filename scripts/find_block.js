@@ -10,7 +10,7 @@
 import algosdk from 'algosdk';
 import minimist from 'minimist';
 
-const c = new algosdk.Algodv2("", "https://testnet-api.algonode.cloud", "");
+const c = new algosdk.Algodv2("", "https://testnet-api.voi.nodly.io", "");
 
 export const getFilenameArguments = () => {
     const args = minimist(process.argv.slice(2));
