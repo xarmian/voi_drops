@@ -16,8 +16,6 @@ import minimist from 'minimist';
 import { algod } from '../include/algod.js';
 import { writeToCSV } from '../include/utils.js';
 
-const c = new algosdk.Algodv2("", "https://testnet-api.voi.nodly.io", "");
-
 export const getFilenameArguments = () => {
     const args = minimist(process.argv.slice(2));
     let start_block = (args.s)??=null;
