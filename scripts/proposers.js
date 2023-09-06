@@ -13,9 +13,8 @@
 
 import algosdk from 'algosdk';
 import minimist from 'minimist';
+import { algod } from '../includes/algod.js';
 import { writeToCSV, sleep } from '../include/utils.js';
-
-const c = new algosdk.Algodv2("", "https://testnet-api.voi.nodly.io", "");
 
 export const getFilenameArguments = () => {
     const args = minimist(process.argv.slice(2));
@@ -31,11 +30,11 @@ export const getFilenameArguments = () => {
 	let prev_round = null;
 
 	while(true) {
-		let last_round = (await c.status().do())['last-round'];
+		let last_round = (await client.status().do())['last-round'];
 	
 		// if previous block is the same as the current block, skip this section, sleep, try again
 		if (last_round != prev_round) {
-			const blk = await c.block(last_round).do();
+			const blk = await algod.block(last_round).do();
 			const addr = algosdk.encodeAddress(blk["cert"]["prop"]["oprop"]);
 			const dt = new Date(blk.block.ts*1000).toLocaleString();
 			console.log(`Block #${blk.block.rnd} @ ${dt} ET: ${addr}`);
@@ -55,7 +54,7 @@ export const getFilenameArguments = () => {
 	let proposers = {};
 
 	for(let i = start_block; i <= end_block; i++) {
-		const blk = await c.block(i).do();
+		const blk = await algod.block(i).do();
 		const addr = algosdk.encodeAddress(blk["cert"]["prop"]["oprop"]);
 
 		console.log(`Block #${blk.block.rnd}: ${addr}`);

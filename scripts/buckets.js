@@ -14,28 +14,26 @@
 */
 
 import algosdk from 'algosdk';
-
-const c = new algosdk.Algodv2("", "https://testnet-api.voi.nodly.io", "");
-const indexerClient = new algosdk.Indexer("", "https://testnet-idx.voi.nodly.io", "");
+import { algod, indexer } from '../include/algod.js';
 
 (async () => {
-    let balancesList = {};
+	let balancesList = {};
 	let totalTokens = 0;
-    let nextToken = null;
+	let nextToken = null;
 
-    do {
-        // Fetch accounts using the indexer (with a limit, e.g., 100 accounts per request)
-        const response = await indexerClient.searchAccounts().limit(100).nextToken(nextToken).do();
+	do {
+		// Fetch accounts using the indexer (with a limit, e.g., 100 accounts per request)
+		const response = await indexer.searchAccounts().limit(100).nextToken(nextToken).do();
 
-        for (const account of response.accounts) {
-            balancesList[account.address] = account.amount;
+		for (const account of response.accounts) {
+			balancesList[account.address] = account.amount;
 			totalTokens += account.amount;
-        }
+		}
 
-        //nextToken = response['next-token'];
-    } while (nextToken);
+		nextToken = response['next-token'];
+	} while (nextToken);
 
-    console.log(balancesList);
+	console.log(balancesList);
 
 	let buckets = {};
 

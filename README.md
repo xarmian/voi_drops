@@ -1,6 +1,7 @@
 This repository contains a set of scripts to perform airdrop functions for the Voi blockchain network.
 
 There are four core scripts located in the `scripts` folder:
+
 # Initial airdrop script - airdrop.js
 Performs an airdrop of network tokens to the accounts in `<acctlist>`,
 which is a CSV file containing three columns -- account address, account type, and atomic amount
@@ -38,3 +39,13 @@ and block 124 is produced at 2023-08-30T08:00:01, and the `TIMESTAMP` input is 2
 will return 124.
 
 Usage: `node find_block.js -t TIMESTAMP`
+
+# Node Configuration
+
+Algod and Indexer clients will default to nodely's voi-testnet nodes, but can be configured with the environment variables:
+- ALGOD_HOST
+- ALGOD_PORT
+- ALGOD_TOKEN
+- INDEXER_HOST
+- INDEXER_PORT
+- INDEXER_TOKEN

@@ -20,9 +20,8 @@ import algosdk from 'algosdk';
 import fs from 'fs';
 import minimist from 'minimist';
 import csvWriter from 'csv-writer';
+import { algod } from '../include/algod.js';
 import { sleep, exitMenu, validateFile, removeAndTrackDuplicates, removeInvalidAddresses, sanitizeWithRemovals, csvToJson } from '../include/utils.js';
-
-const algodClient = new algosdk.Algodv2("", "https://testnet-api.voi.nodly.io", "");
 
 const getFilenameArguments = () => {
     const args = minimist(process.argv.slice(2));
@@ -37,7 +36,7 @@ const getFilenameArguments = () => {
 const transferTokens = async (sender,array, successStream, errorStream, groupSize) => {
     let successList = [];
     let errorList = [];
-    const params = await algodClient.getTransactionParams().do();
+    const params = await algod.getTransactionParams().do();
     let txGroup = [];
     let objInGroup = [];
 
@@ -67,8 +66,8 @@ const transferTokens = async (sender,array, successStream, errorStream, groupSiz
         }
 
         try {
-            const { txId } = await algodClient.sendRawTransaction(signedTxns).do();
-            let confirmedTxn = await waitForConfirmation(algodClient, txId, 8);
+            const { txId } = await algod.sendRawTransaction(signedTxns).do();
+            let confirmedTxn = await waitForConfirmation(algod, txId, 8);
             if (confirmedTxn) {
                 for (let o of objInGroup) {
                     //o['confirmed-round'] = confirmedTxn['confirmed-round'];
@@ -95,12 +94,12 @@ const transferTokens = async (sender,array, successStream, errorStream, groupSiz
     return [ successList, errorList ];
 }
 
-const waitForConfirmation = async (algodClient, txId, timeout) => {
+const waitForConfirmation = async (algod, txId, timeout) => {
     let startTime = new Date().getTime();
-    let txInfo = await algodClient.pendingTransactionInformation(txId).do();
+    let txInfo = await algod.pendingTransactionInformation(txId).do();
     while (txInfo['confirmed-round'] === null && new Date().getTime() - startTime < timeout * 1000) {
         sleep(1000);
-        txInfo = await algodClient.pendingTransactionInformation(txId).do();
+        txInfo = await algod.pendingTransactionInformation(txId).do();
     }
     if (txInfo['confirmed-round'] !== null) {
         return txInfo;
