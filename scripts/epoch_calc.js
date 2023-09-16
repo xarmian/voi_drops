@@ -13,9 +13,8 @@
 
 import algosdk from 'algosdk';
 import minimist from 'minimist';
+import { algod } from '../include/algod.js';
 import { writeToCSV } from '../include/utils.js';
-
-const c = new algosdk.Algodv2("", "https://testnet-api.voi.nodly.io", "");
 
 export const getFilenameArguments = () => {
     const args = minimist(process.argv.slice(2));
@@ -36,7 +35,7 @@ export const getFilenameArguments = () => {
 	let proposers = {};
 
 	for(let i = start_block; i <= end_block; i++) {
-		const blk = await c.block(i).do();
+		const blk = await algod.block(i).do();
 		const addr = algosdk.encodeAddress(blk["cert"]["prop"]["oprop"]);
 		
 		if (typeof proposers[addr] == 'undefined') {

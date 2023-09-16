@@ -20,6 +20,7 @@ import algosdk from 'algosdk';
 import fs from 'fs';
 import minimist from 'minimist';
 import csvWriter from 'csv-writer';
+import { algod } from '../include/algod.js';
 import { sleep, exitMenu, validateFile, removeAndTrackDuplicates, removeInvalidAddresses, sanitizeWithRemovals, csvToJson } from '../include/utils.js';
 import fetch from 'node-fetch';
 
@@ -51,6 +52,9 @@ const transferTokens = async (sender,array, successStream, errorStream, groupSiz
     for (let i = 0; i < array.length; i++) {
         let obj = array[i];
         const txn = algosdk.makePaymentTxnWithSuggestedParams(sender.addr, obj.account, parseInt(obj.tokenAmount), undefined, algosdk.encodeObj({'userType': obj.userType}),params);
+        // Using the receiver transaction as a lease
+        // This prevents the airdrop script from sending a rewards payment twice in a 1000 round range
+        txn.lease = algosdk.decodeAddress(obj.account).publicKey;
 
         txGroup.push(txn);
         objInGroup.push(obj);
@@ -71,8 +75,8 @@ const transferTokens = async (sender,array, successStream, errorStream, groupSiz
         }
 
         try {
-            const { txId } = await algodClient.sendRawTransaction(signedTxns).do();
-            let confirmedTxn = await waitForConfirmation(algodClient, txId, 8);
+            const { txId } = await algod.sendRawTransaction(signedTxns).do();
+            let confirmedTxn = await waitForConfirmation(algod, txId, 8);
             if (confirmedTxn) {
                 for (let o of objInGroup) {
                     //o['confirmed-round'] = confirmedTxn['confirmed-round'];
@@ -99,12 +103,12 @@ const transferTokens = async (sender,array, successStream, errorStream, groupSiz
     return [ successList, errorList ];
 }
 
-const waitForConfirmation = async (algodClient, txId, timeout) => {
+const waitForConfirmation = async (algod, txId, timeout) => {
     let startTime = new Date().getTime();
-    let txInfo = await algodClient.pendingTransactionInformation(txId).do();
+    let txInfo = await algod.pendingTransactionInformation(txId).do();
     while (txInfo['confirmed-round'] === null && new Date().getTime() - startTime < timeout * 1000) {
         sleep(1000);
-        txInfo = await algodClient.pendingTransactionInformation(txId).do();
+        txInfo = await algod.pendingTransactionInformation(txId).do();
     }
     if (txInfo['confirmed-round'] !== null) {
         return txInfo;

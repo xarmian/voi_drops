@@ -9,8 +9,7 @@
 
 import algosdk from 'algosdk';
 import minimist from 'minimist';
-
-const c = new algosdk.Algodv2("", "https://testnet-api.voi.nodly.io", "");
+import { algod } from '../include/algod.js';
 
 export const getFilenameArguments = () => {
     const args = minimist(process.argv.slice(2));
@@ -19,11 +18,11 @@ export const getFilenameArguments = () => {
 }
 
 async function getClosestBlock(timestamp,lowerBound = 1) {
-    let upperBound = (await c.status().do())['last-round'];
+    let upperBound = (await algod.status().do())['last-round'];
 
     while (lowerBound <= upperBound) {
         const midPoint = Math.floor((upperBound + lowerBound) / 2);
-        const block = await c.block(midPoint).do();
+        const block = await algod.block(midPoint).do();
         const blockTime = block.block.ts * 1000; // Convert from seconds to milliseconds
 
         if (blockTime < timestamp) {
@@ -54,7 +53,7 @@ async function getClosestBlock(timestamp,lowerBound = 1) {
 	console.log(block);
 
 	// get actual block time
-	const detail = await c.block(block).do();
+	const detail = await algod.block(block).do();
 	const tm = new Date(detail.block.ts * 1000).toLocaleString();
 	console.log(`Actual block time: ${tm}`);
 
