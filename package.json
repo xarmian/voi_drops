@@ -11,8 +11,10 @@
   "license": "ISC",
   "dependencies": {
     "algosdk": "^2.4.0",
+    "config": "^3.3.9",
     "csv-writer": "^1.6.0",
     "fast-csv": "^4.3.6",
-    "minimist": "^1.2.8"
+    "minimist": "^1.2.8",
+    "node-fetch": "^3.3.2"
   }
 }

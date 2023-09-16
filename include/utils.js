@@ -52,7 +52,7 @@ export const removeInvalidAddresses = (array, errorList) => {
     return [ array, errorList ];
 }
 
-// remove blacklisted addresses from airdrop array. "array" is 
+// remove blacklisted addresses from airdrop array
 export const sanitizeWithRemovals = (array, blacklist) => {
     let blacklistObj = {};
     for (let obj of blacklist) {

@@ -21,8 +21,11 @@ import fs from 'fs';
 import minimist from 'minimist';
 import csvWriter from 'csv-writer';
 import { sleep, exitMenu, validateFile, removeAndTrackDuplicates, removeInvalidAddresses, sanitizeWithRemovals, csvToJson } from '../include/utils.js';
+import fetch from 'node-fetch';
 
 const algodClient = new algosdk.Algodv2("", "https://testnet-api.voi.nodly.io", "");
+const blacklistEndpoint = 'https://analytics.testnet.voi.nodly.io/v0/consensus/ballast';
+const FLAT_FEE = 1000; // flat fee amount, 1000 microvoi == .001 voi
 
 const getFilenameArguments = () => {
     const args = minimist(process.argv.slice(2));
@@ -37,7 +40,11 @@ const getFilenameArguments = () => {
 const transferTokens = async (sender,array, successStream, errorStream, groupSize) => {
     let successList = [];
     let errorList = [];
+
     const params = await algodClient.getTransactionParams().do();
+    params.fee = FLAT_FEE;
+    params.flatFee = true;
+
     let txGroup = [];
     let objInGroup = [];
 
@@ -105,6 +112,21 @@ const waitForConfirmation = async (algodClient, txId, timeout) => {
     return null;
 }
 
+const fetchBlacklist = async() => {
+    const response = await fetch(blacklistEndpoint);
+    if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+    }
+
+    const jsonData = await response.json();
+    const combinedAddresses = [
+        ...Object.keys(jsonData.bparts),
+        ...Object.keys(jsonData.bots)
+    ].map(account => ({ account }));
+
+    return combinedAddresses;
+}
+
 (async () => {
     let [ acctFileName, blacklistFileName, paramMnemonic, testMode, groupSize ] = getFilenameArguments();
 
@@ -118,12 +140,25 @@ const waitForConfirmation = async (algodClient, txId, timeout) => {
         exitMenu('Accounts file invalid');
     }
     
+    // handle senderMnemonic
+    if (typeof process.env.MNEMONIC == 'undefined' && paramMnemonic == null) {
+        exitMenu('Sender Mnemonic must be specified using -m parameter or as environemnt variable MNEMONIC');
+    }
+
     // handle blacklist
     let blacklist = []; // list of addresses to not send to
     if (blacklistFileName != null && blacklistFileName != false) {
         if (fs.existsSync(blacklistFileName) && validateFile(blacklistFileName)) {
             blacklist = await csvToJson(blacklistFileName);
         }
+    }
+
+    // pull in additional blacklist addresses from API
+    try {
+        const blacklistFromApi = await fetchBlacklist();
+        blacklist = blacklist.concat(blacklistFromApi);
+    } catch (error) {
+        exitMenu(`Unable to fetch blacklist from API: `, error);
     }
 
     let alreadySent = [];
@@ -136,13 +171,9 @@ const waitForConfirmation = async (algodClient, txId, timeout) => {
 
     const removeList = blacklist.concat(alreadySent);
 
-    // handle senderMnemonic
-    if (typeof process.env.MNEMONIC == 'undefined' && paramMnemonic == null) {
-        exitMenu('Sender Mnemonic must be specified using -m parameter or as environemnt variable MNEMONIC');
-    }
-
     const sender = algosdk.mnemonicToSecretKey(paramMnemonic??=process.env.MNEMONIC);
     const origDropList = sanitizeWithRemovals(await csvToJson(acctFileName), removeList);
+
 	let [ dropList, errorDropList ] = removeAndTrackDuplicates(origDropList);
     [ dropList, errorDropList ] = removeInvalidAddresses(dropList, errorDropList);
 
