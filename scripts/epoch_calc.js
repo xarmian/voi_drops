@@ -14,7 +14,10 @@
 import algosdk from 'algosdk';
 import minimist from 'minimist';
 import { algod } from '../include/algod.js';
-import { fetchBlacklist, writeToCSV } from '../include/utils.js';
+import { sleep, fetchBlacklist, writeToCSV } from '../include/utils.js';
+import sqlite3 from 'sqlite3';
+
+const db = new sqlite3.Database('proposers.db');
 
 // show help menu and exit
 export const exitMenu = (err) => {
@@ -33,12 +36,61 @@ export const getFilenameArguments = () => {
     return [ start_block, end_block, epoch_block_reward, output_filename, blackList ];
 }
 
+function createBlocksTableIfNotExists() {
+    return new Promise((resolve, reject) => {
+        db.run(`
+            CREATE TABLE IF NOT EXISTS blocks (
+                block INTEGER PRIMARY KEY,
+                proposer VARCHAR(58)
+            )
+        `, err => {
+            if (err) return reject(err);
+            resolve();
+        });
+    });
+}
+
+function getProposerFromDb(block) {
+    return new Promise((resolve, reject) => {
+        db.get("SELECT proposer FROM blocks WHERE block = ?", [block], (err, row) => {
+            if (err) return reject(err);
+            resolve(row ? row.proposer : null);
+        });
+    });
+}
+
+function storeBlockInDb(block, proposer) {
+    return new Promise((resolve, reject) => {
+        const stmt = db.prepare("INSERT OR REPLACE INTO blocks (block, proposer) VALUES (?, ?)");
+        stmt.run(block, proposer, err => {
+            if (err) return reject(err);
+            resolve();
+        });
+        stmt.finalize();
+    });
+}
+
+async function getHighestStoredBlock() {
+    return new Promise((resolve, reject) => {
+        db.get("SELECT MAX(block) as highestBlock FROM blocks", [], (err, row) => {
+            if (err) return reject(err);
+            resolve(row ? row.highestBlock : 0);
+        });
+    });
+}
+
 (async () => {
 	const [ start_block, end_block, epoch_block_reward, output_filename, blacklistFileName ] = getFilenameArguments();
+
+	// Ensure the blocks table exists
+	await createBlocksTableIfNotExists();
 
 	if (start_block == null || end_block == null) {
 		exitMenu(`Start and end blocks required`);
 	}
+
+	const highestStoredBlock = await getHighestStoredBlock();
+    console.log(`Highest stored block in the database: ${highestStoredBlock}`);
 
 	const epoch_total_blocks = end_block-start_block+1;
 	console.log(`Total blocks produced in Epoch: ${epoch_total_blocks}`);
@@ -62,27 +114,44 @@ export const getFilenameArguments = () => {
 	blacklist = blacklist.map(item => item.account);
 
 	let proposers = {};
+	let proposedBlockCount = 0;
 
 	for(let i = start_block; i <= end_block; i++) {
-		const blk = await algod.block(i).do();
-		const addr = algosdk.encodeAddress(blk["cert"]["prop"]["oprop"]);
-		
-		// skip if address is in blacklist
-		if (blacklist.includes(addr)) continue;
+		if (i%1000 == 0) console.log(`Retrieving block ${i}`);
 
-		if (typeof proposers[addr] == 'undefined') {
-			proposers[addr] = 1;
+        let addr = await getProposerFromDb(i);
+
+		if (!addr) {
+			try {
+				const blk = await algod.block(i).do();
+				addr = algosdk.encodeAddress(blk["cert"]["prop"]["oprop"]);
+	
+				// store this block and its proposer in the database
+				await storeBlockInDb(i, addr);
+			} catch (error) {
+				console.error(`Error retrieving block ${i} from API, retrying.`);
+				await sleep(10000); // wait 10 seconds before trying again
+				i--;  // Decrement the block counter to retry the same block after sleeping.
+				continue;
+			}
 		}
-		else {
-			proposers[addr]++;
-		}
+	
+        // skip if address is in blacklist
+        if (blacklist.includes(addr)) continue;
+
+        if (typeof proposers[addr] == 'undefined') {
+            proposers[addr] = 1;
+        } else {
+            proposers[addr]++;
+        }
+		proposedBlockCount++;
 	}
 
 	// print out proposers list with tokens owed based on percentage proposed
 	let rewards = [];
 	for(let p in proposers) {
-		const pct = Math.round((proposers[p] / epoch_total_blocks) * 10000) / 100;
-		const reward = Math.round((proposers[p] / epoch_total_blocks) * epoch_block_reward);
+		const pct = Math.round((proposers[p] / proposedBlockCount) * 10000) / 100;
+		const reward = Math.round((proposers[p] / proposedBlockCount) * epoch_block_reward);
 		console.log(`${p}: ${proposers[p]} - ${pct}% - ${reward} VOI`);
 
 		rewards.push({
@@ -91,6 +160,7 @@ export const getFilenameArguments = () => {
 			tokenAmount: reward,
 		});
 	}
+	console.log(`Total blocks produced by non-blacklisted addresses: ${proposedBlockCount}`);
 
 	// write out to CSV file
 	writeToCSV(rewards,output_filename);
