@@ -151,8 +151,8 @@ async function getHighestStoredBlock() {
 	let rewards = [];
 	for(let p in proposers) {
 		const pct = Math.round((proposers[p] / proposedBlockCount) * 10000) / 100;
-		const reward = Math.round((proposers[p] / proposedBlockCount) * epoch_block_reward);
-		console.log(`${p}: ${proposers[p]} - ${pct}% - ${reward} VOI`);
+		const reward = Math.round((proposers[p] / proposedBlockCount) * epoch_block_reward * Math.pow(10,6));
+		console.log(`${p}: ${proposers[p]} - ${pct}% - ${reward / Math.pow(10,6)} VOI`);
 
 		rewards.push({
 			account: p,
