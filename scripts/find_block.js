@@ -41,23 +41,49 @@ async function getClosestBlock(timestamp,lowerBound = 1) {
 	const [ timestamp ] = getFilenameArguments();
 
 	if (timestamp == 0) {
-		console.log('Timestamp of format YYYY-MM-DDTHH:MM:SS[Z] required using -t');
+		console.log('Timestamp of format YYYY-MM-DD[THH:MM:SS[Z]] required using -t');
+		console.log('If only a date component is supplied, this script will locate the first and last block in GMT time on that particular date');
 		console.log('Example using GMT Time:       node find_block.js -t 2023-08-28T13:04:33Z');
 		console.log('Example using Local Timezone: node find_block.js -t 2023-08-28T13:04:33');
-		process.exit();
+        console.log('Example using Date only:      node find_block.js -t 2023-08-28');
+        process.exit();
 	}
 
-    const useTime = new Date(timestamp).valueOf();
+    if (timestamp.length == 10) {
+        console.log(`Looking for starting and ending blocks for ${timestamp}...`);
+        const startTime = new Date(timestamp+'T00:00:00Z');
+        const startBlock = await getClosestBlock(startTime);
+        const startBlockDetail = await algod.block(startBlock).do();
+        const startBlockTime = new Date(startBlockDetail.block.ts * 1000);
 
-	process.stdout.write(`Calculating block at ${timestamp} ... `);
-    const block = await getClosestBlock(useTime);
-	console.log(block);
+        const endTime = new Date(timestamp+'T23:59:59Z');
+        let endBlock = await getClosestBlock(endTime);
+        let endBlockDetail = await algod.block(endBlock).do();
+        let endBlockTime = new Date(endBlockDetail.block.ts * 1000);
+        if (endBlockTime > endTime) {
+            endBlock--;
+            endBlockDetail = await algod.block(endBlock).do();
+            endBlockTime = new Date(endBlockDetail.block.ts * 1000);
+        }
 
-	// get actual block time
-	const detail = await algod.block(block).do();
-	const tm = new Date(detail.block.ts * 1000); 
-	console.log(`Actual block time: ${tm.toString()}`);
-    console.log(`                   ${tm.toUTCString()}`)
+        console.log(`Start Block: ${startBlock} @ ${startBlockTime.toUTCString()}`);
+        console.log(`End Block:   ${endBlock} @ ${endBlockTime.toUTCString()}`);
+        console.log(``);
+        console.log(`Epoch Rewards Calc Command: node epoch_calc.js -s ${startBlock} -e ${endBlock} -r <rewards> [-f <csvfile>]`);
+    }
+    else {
+        const useTime = new Date(timestamp).valueOf();
+
+        process.stdout.write(`Calculating block at ${timestamp} ... `);
+        const block = await getClosestBlock(useTime);
+        console.log(block);
+
+        // get actual block time
+        const detail = await algod.block(block).do();
+        const tm = new Date(detail.block.ts * 1000); 
+        console.log(`Actual block time: ${tm.toString()}`);
+        console.log(`                   ${tm.toUTCString()}`);
+    }
 
 	process.exit();
 })();
