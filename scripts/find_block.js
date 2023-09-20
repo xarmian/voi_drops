@@ -1,7 +1,7 @@
 /*
 
 	Script to find the next block following a specified date/time using a binary search.
-	Time must be formatted as YYYY-MM-DDTHH:MM:SS, i.e. 2023-08-28T13:04:33
+	Time must be formatted as YYYY-MM-DDTHH:MM:SSZ, i.e. 2023-08-28T13:04:33Z
 
 	Usage: node find_block.js -t TIMESTAMP
 
@@ -41,12 +41,13 @@ async function getClosestBlock(timestamp,lowerBound = 1) {
 	const [ timestamp ] = getFilenameArguments();
 
 	if (timestamp == 0) {
-		console.log('GMT Timestamp of format YYYY-MM-DDTHH:MM:SS required using -t');
-		console.log('Usage: node find_block.js -t 2023-08-28T13:04:33');
+		console.log('Timestamp of format YYYY-MM-DDTHH:MM:SS[Z] required using -t');
+		console.log('Example using GMT Time:       node find_block.js -t 2023-08-28T13:04:33Z');
+		console.log('Example using Local Timezone: node find_block.js -t 2023-08-28T13:04:33');
 		process.exit();
 	}
 
-    const useTime = new Date(timestamp).getTime();
+    const useTime = new Date(timestamp).valueOf();
 
 	process.stdout.write(`Calculating block at ${timestamp} ... `);
     const block = await getClosestBlock(useTime);
@@ -54,8 +55,9 @@ async function getClosestBlock(timestamp,lowerBound = 1) {
 
 	// get actual block time
 	const detail = await algod.block(block).do();
-	const tm = new Date(detail.block.ts * 1000).toLocaleString();
-	console.log(`Actual block time: ${tm}`);
+	const tm = new Date(detail.block.ts * 1000); 
+	console.log(`Actual block time: ${tm.toString()}`);
+    console.log(`                   ${tm.toUTCString()}`)
 
 	process.exit();
 })();
