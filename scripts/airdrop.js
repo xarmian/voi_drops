@@ -21,12 +21,17 @@ import fs from 'fs';
 import minimist from 'minimist';
 import csvWriter from 'csv-writer';
 import { algod } from '../include/algod.js';
-import { sleep, exitMenu, validateFile, removeAndTrackDuplicates, removeInvalidAddresses, sanitizeWithRemovals, csvToJson } from '../include/utils.js';
-import fetch from 'node-fetch';
+import { sleep, fetchBlacklist, validateFile, removeAndTrackDuplicates, removeInvalidAddresses, sanitizeWithRemovals, csvToJson } from '../include/utils.js';
 
 const algodClient = new algosdk.Algodv2("", "https://testnet-api.voi.nodly.io", "");
-const blacklistEndpoint = 'https://analytics.testnet.voi.nodly.io/v0/consensus/ballast';
 const FLAT_FEE = 1000; // flat fee amount, 1000 microvoi == .001 voi
+
+// show help menu and exit
+export const exitMenu = (err) => {
+	if (err) console.log(`ERROR: ${err}`);
+	console.log(`Command: node airdrop.js -a <acctlist> [-b <blacklist>] [-g <group_size>] [-m "mnemonic of sender"]`);
+	process.exit();
+}
 
 const getFilenameArguments = () => {
     const args = minimist(process.argv.slice(2));
@@ -114,21 +119,6 @@ const waitForConfirmation = async (algod, txId, timeout) => {
         return txInfo;
     }
     return null;
-}
-
-const fetchBlacklist = async() => {
-    const response = await fetch(blacklistEndpoint);
-    if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
-    }
-
-    const jsonData = await response.json();
-    const combinedAddresses = [
-        ...Object.keys(jsonData.bparts),
-        ...Object.keys(jsonData.bots)
-    ].map(account => ({ account }));
-
-    return combinedAddresses;
 }
 
 (async () => {

@@ -2,21 +2,33 @@ import algosdk from 'algosdk';
 import fs from 'fs';
 import csv from 'fast-csv';
 import csvWriter from 'csv-writer';
+import fetch from 'node-fetch';
 
 export const sleep = async (ms) => {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// show help menu and exit
-export const exitMenu = (err) => {
-	if (err) console.log(`ERROR: ${err}`);
-	console.log(`Command: node airdrop.js -a <acctlist> [-b <blacklist>] [-g <group_size>] [-m "mnemonic of sender"]`);
-	process.exit();
-}
-
 // TODO: validate csv
 export const validateFile = async (file) => {
 	return true;
+}
+
+// construct blacklist from allo analytics api endpoint
+export const fetchBlacklist = async() => {
+    const blacklistEndpoint = 'https://analytics.testnet.voi.nodly.io/v0/consensus/ballast';
+
+    const response = await fetch(blacklistEndpoint);
+    if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+    }
+
+    const jsonData = await response.json();
+    const combinedAddresses = [
+        ...Object.keys(jsonData.bparts),
+        ...Object.keys(jsonData.bots)
+    ].map(account => ({ account }));
+
+    return combinedAddresses;
 }
 
 // iterate over dropList. add addresses to array. if duplicate or invalid address found remove from array and add address to errorList
