@@ -23,7 +23,12 @@ Given a `STARTBLOCK` and `ENDBLOCK`, and an integer of atomic tokens
 to distribute to each block proposer and writes it to `FILENAME`. This output file can then be used
 as the `<acctList>` input to `airdrop.js` to airdrop the alloted tokens to each address.
 
-Usage: `node epoch_calc.js -s STARTBLOCK -e ENDBLOCK -r EPOCHREWARD -f FILENAME`
+Note: Due to the intensity and time required to read blocks from the indexer API,
+this script will create a SQLite database file named `proposers.db`.
+The database is used to store block information and acts as a local cache.
+
+Usage: `node epoch_calc.js -s STARTBLOCK -e ENDBLOCK -r EPOCHREWARD [-f FILENAME]`  
+Example: `node epoch_calc.js -s 240000 -e 250000 -r 2500000 -f rewards.csv`
 
 # Account bucketing scirpt - buckets.js
 
@@ -33,12 +38,19 @@ NOTE: buckets.js is incomplete.
 
 # Block finder by timestamp - find_block.js
 
-Given a GMT timestamp in the format YYYY-MM-DDTHH:II:SS, find the block produced at the specified time,
+Given a timestamp in the format YYYY-MM-DDTHH:II:SS, find the block produced at the specified time,
 or the next block produced after the specified time. For example, if block 123 is produced at 2023-08-30T07:59:59
 and block 124 is produced at 2023-08-30T08:00:01, and the `TIMESTAMP` input is 2023-08-30T08:00:00 then the script
 will return 124.
 
-Usage: `node find_block.js -t TIMESTAMP`
+Note that a Z must be included in the time to use UTC time, otherwise the search will be performed based on the
+local machine timezone.
+
+This script will also accept a date in the format `YYYY-MM-DD` and will perform a search for the first and last
+block produced between 12:00:00AM and 11:59:59PM GMT, and will output the command to run epoch_calc.js
+
+Usage: `node find_block.js -t TIMESTAMP`  
+Example: `node find_block.js -t 2023-09-19`
 
 # Node Configuration
 

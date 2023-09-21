@@ -3,6 +3,10 @@
 	Script to find the next block following a specified date/time using a binary search.
 	Time must be formatted as YYYY-MM-DDTHH:MM:SSZ, i.e. 2023-08-28T13:04:33Z
 
+    This script will also accept a date without a time in the format YYYY-MM-DD
+    and will output the start and end blocks for that date (midnight to midnight GMT)
+    along with the command to run epoch_calc.js
+
 	Usage: node find_block.js -t TIMESTAMP
 
 */
