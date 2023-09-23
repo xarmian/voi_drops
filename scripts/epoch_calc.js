@@ -6,15 +6,16 @@
 	- Build array of block proposers during epoch, increment 1 per block produced
 	- Given total epoch reward, calculate reward for each proposer based on percentage of blocks proposed during epoch
 	- Write amounts to CSV (epoch_rewards.csv)
+	- START and END can be dates in format YYYY-MM-DD or block numbers
 
-	Usage: node epoch_calc.js -s STARTTIME -e ENDTIME -r EPOCHREWARD -f FILENAME [-b <blacklist.csv>]
+	Usage: node epoch_calc.js -s START -e END -r EPOCHREWARD -f FILENAME [-b <blacklist.csv>]
 
 */
 
 import algosdk from 'algosdk';
 import minimist from 'minimist';
 import { algod } from '../include/algod.js';
-import { sleep, fetchBlacklist, writeToCSV } from '../include/utils.js';
+import { sleep, fetchBlacklist, writeToCSV, getClosestBlock } from '../include/utils.js';
 import sqlite3 from 'sqlite3';
 
 const db = new sqlite3.Database('proposers.db');
@@ -80,18 +81,54 @@ async function getHighestStoredBlock() {
 }
 
 (async () => {
-	const [ start_block, end_block, epoch_block_reward, output_filename, blacklistFileName ] = getFilenameArguments();
+	const [ start_time, end_time, epoch_block_reward, output_filename, blacklistFileName ] = getFilenameArguments();
 
 	// Ensure the blocks table exists
 	await createBlocksTableIfNotExists();
 
-	if (start_block == null || end_block == null) {
+	if (start_time == null || end_time == null) {
 		exitMenu(`Start and end blocks required`);
 	}
 
 	const highestStoredBlock = await getHighestStoredBlock();
     console.log(`Highest stored block in the database: ${highestStoredBlock}`);
 
+	let start_block = start_time;
+	let end_block = end_time;
+
+	// find start and end blocks for epoch
+	console.log(`Looking for starting and ending blocks for range: ${start_time} to ${end_time}...`);
+
+	if (start_time.length == 10 && start_time.indexOf('-') !== -1) {
+		const startTime = new Date(start_time+'T00:00:00Z');
+		start_block = await getClosestBlock(startTime);
+	}
+	const startBlockDetail = await algod.block(start_block).do();
+	const startBlockTime = new Date(startBlockDetail.block.ts * 1000);
+
+	let endBlockDetail = null;
+	let endBlockTime = null;
+	if (end_time.length == 10 && end_time.indexOf('-') !== -1) {
+		const endTime = new Date(end_time+'T23:59:59Z');
+		end_block = await getClosestBlock(endTime);
+
+		endBlockDetail = await algod.block(end_block).do();
+		endBlockTime = new Date(endBlockDetail.block.ts * 1000);
+		if (endBlockTime > endTime) {
+			end_block--;
+			endBlockDetail = await algod.block(end_block).do();
+			endBlockTime = new Date(endBlockDetail.block.ts * 1000);
+		}
+	}
+	else {
+		endBlockDetail = await algod.block(end_block).do();
+		endBlockTime = new Date(endBlockDetail.block.ts * 1000);
+	}
+
+	console.log(`Start Block: ${start_block} @ ${startBlockTime.toUTCString()}`);
+	console.log(`End Block:   ${end_block} @ ${endBlockTime.toUTCString()}`);
+
+	// calc total blocks in epoch
 	const epoch_total_blocks = end_block-start_block+1;
 	console.log(`Total blocks produced in Epoch: ${epoch_total_blocks}`);
 	console.log(`Finding block proposers between blocks ${start_block} and ${end_block}...`);
@@ -156,9 +193,16 @@ async function getHighestStoredBlock() {
 
 		rewards.push({
 			account: p,
+			userType: proposers[p],
+			percent: pct,
+			tokenAmount: (reward / Math.pow(10,6))+' VOI',
+		});
+
+		/*rewards.push({
+			account: p,
 			userType: 'node',
 			tokenAmount: reward,
-		});
+		});*/
 	}
 	console.log(`Total blocks produced by non-blacklisted addresses: ${proposedBlockCount}`);
 

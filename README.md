@@ -18,7 +18,7 @@ Usage: `node airdrop.js -a <acctlist> [-b <blacklist>] [-g <group_size>] [-m "mn
 
 # Epoch reward calculaton script - epoch_calc.js
 
-Given a `STARTBLOCK` and `ENDBLOCK`, and an integer of atomic tokens
+Given a `START` and `END`, and an integer of atomic tokens
 (`EPOCHREWARD`) to distribute evenly among block proposers, this script calculates the number of tokens
 to distribute to each block proposer and writes it to `FILENAME`. This output file can then be used
 as the `<acctList>` input to `airdrop.js` to airdrop the alloted tokens to each address.
@@ -27,7 +27,10 @@ Note: Due to the intensity and time required to read blocks from the indexer API
 this script will create a SQLite database file named `proposers.db`.
 The database is used to store block information and acts as a local cache.
 
-Usage: `node epoch_calc.js -s STARTBLOCK -e ENDBLOCK -r EPOCHREWARD [-f FILENAME]`  
+`START` and `END` may be block numbers or dates. If a date is provided, the script will automatically
+locate the first block available on the `START` date and the last block available on the `END` date
+
+Usage: `node epoch_calc.js -s START -e END -r EPOCHREWARD [-f FILENAME]`  
 Example: `node epoch_calc.js -s 240000 -e 250000 -r 2500000 -f rewards.csv`
 
 # Account bucketing scirpt - buckets.js

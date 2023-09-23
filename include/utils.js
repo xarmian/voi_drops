@@ -3,6 +3,7 @@ import fs from 'fs';
 import csv from 'fast-csv';
 import csvWriter from 'csv-writer';
 import fetch from 'node-fetch';
+import { algod } from '../include/algod.js';
 
 export const sleep = async (ms) => {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -11,6 +12,26 @@ export const sleep = async (ms) => {
 // TODO: validate csv
 export const validateFile = async (file) => {
 	return true;
+}
+
+export const getClosestBlock = async (timestamp,lowerBound = 1) => {
+    let upperBound = (await algod.status().do())['last-round'];
+
+    while (lowerBound <= upperBound) {
+        const midPoint = Math.floor((upperBound + lowerBound) / 2);
+        const block = await algod.block(midPoint).do();
+        const blockTime = block.block.ts * 1000; // Convert from seconds to milliseconds
+
+        if (blockTime < timestamp) {
+            lowerBound = midPoint + 1;
+        } else if (blockTime > timestamp) {
+            upperBound = midPoint - 1;
+        } else {
+            return midPoint;  // Exact match, though this is unlikely
+        }
+    }
+
+    return lowerBound; // Returns block with timestamp just after the given timestamp
 }
 
 // construct blacklist from allo analytics api endpoint
