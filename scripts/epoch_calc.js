@@ -189,6 +189,7 @@ async function getHighestStoredBlock() {
         }
 		proposedBlockCount++;
 	}
+	console.log('');
 
 	// print out proposers list with tokens owed based on percentage proposed
 	let rewards = [];
@@ -197,18 +198,18 @@ async function getHighestStoredBlock() {
 		const reward = Math.round((proposers[p] / proposedBlockCount) * epoch_block_reward * Math.pow(10,6));
 		console.log(`${p}: ${proposers[p]} - ${pct}% - ${reward / Math.pow(10,6)} VOI`);
 
-		rewards.push({
+		/*rewards.push({
 			account: p,
 			userType: proposers[p],
 			percent: pct,
 			tokenAmount: (reward / Math.pow(10,6))+' VOI',
-		});
+		});*/
 
-		/*rewards.push({
+		rewards.push({
 			account: p,
 			userType: 'node',
 			tokenAmount: reward,
-		});*/
+		});
 	}
 	console.log(`Total blocks produced by non-blacklisted addresses: ${proposedBlockCount}`);
 
