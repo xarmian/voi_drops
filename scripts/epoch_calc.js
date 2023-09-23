@@ -154,7 +154,11 @@ async function getHighestStoredBlock() {
 	let proposedBlockCount = 0;
 
 	for(let i = start_block; i <= end_block; i++) {
-		if (i%1000 == 0) console.log(`Retrieving block ${i}`);
+		if (i%10 == 0) {
+			process.stdout.clearLine();
+			process.stdout.cursorTo(0);
+			process.stdout.write(`Retrieving block ${i} (${end_block - i} remaining)`);
+		}
 
         let addr = await getProposerFromDb(i);
 
@@ -166,7 +170,9 @@ async function getHighestStoredBlock() {
 				// store this block and its proposer in the database
 				await storeBlockInDb(i, addr);
 			} catch (error) {
-				console.error(`Error retrieving block ${i} from API, retrying.`);
+				process.stdout.clearLine();
+				process.stdout.cursorTo(0);
+				process.stdout.write(`Error retrieving block ${i} from API, retrying.`);
 				await sleep(10000); // wait 10 seconds before trying again
 				i--;  // Decrement the block counter to retry the same block after sleeping.
 				continue;
