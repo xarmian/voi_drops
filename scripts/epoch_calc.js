@@ -42,7 +42,8 @@ function createBlocksTableIfNotExists() {
         db.run(`
             CREATE TABLE IF NOT EXISTS blocks (
                 block INTEGER PRIMARY KEY,
-                proposer VARCHAR(58)
+                proposer VARCHAR(58),
+				timestamp DATETIME DEFAULT '0000-00-00 00:00:00'
             )
         `, err => {
             if (err) return reject(err);
@@ -60,10 +61,10 @@ function getProposerFromDb(block) {
     });
 }
 
-function storeBlockInDb(block, proposer) {
+function storeBlockInDb(block, proposer, timestamp) {
     return new Promise((resolve, reject) => {
-        const stmt = db.prepare("INSERT OR REPLACE INTO blocks (block, proposer) VALUES (?, ?)");
-        stmt.run(block, proposer, err => {
+        const stmt = db.prepare("INSERT OR REPLACE INTO blocks (block, proposer, timestamp) VALUES (?, ?, ?)");
+        stmt.run(block, proposer, timestamp, err => {
             if (err) return reject(err);
             resolve();
         });
@@ -166,9 +167,10 @@ async function getHighestStoredBlock() {
 			try {
 				const blk = await algod.block(i).do();
 				addr = algosdk.encodeAddress(blk["cert"]["prop"]["oprop"]);
+				const timestamp = new Date(blk.block.ts*1000).toISOString();
 	
 				// store this block and its proposer in the database
-				await storeBlockInDb(i, addr);
+				await storeBlockInDb(i, addr, timestamp);
 			} catch (error) {
 				process.stdout.clearLine();
 				process.stdout.cursorTo(0);
@@ -194,9 +196,9 @@ async function getHighestStoredBlock() {
 	// print out proposers list with tokens owed based on percentage proposed
 	let rewards = [];
 	for(let p in proposers) {
-		const pct = Math.round((proposers[p] / proposedBlockCount) * 10000) / 100;
+		const pct = proposers[p] / proposedBlockCount;
 		const reward = Math.round((proposers[p] / proposedBlockCount) * epoch_block_reward * Math.pow(10,6));
-		console.log(`${p}: ${proposers[p]} - ${pct}% - ${reward / Math.pow(10,6)} VOI`);
+		console.log(`${p}: ${proposers[p]} - ${pct} - ${reward / Math.pow(10,6)} VOI`);
 
 		/*rewards.push({
 			account: p,
@@ -209,6 +211,8 @@ async function getHighestStoredBlock() {
 			account: p,
 			userType: 'node',
 			tokenAmount: reward,
+			blocks: proposers[p],
+			percent: pct,
 		});
 	}
 	console.log(`Total blocks produced by non-blacklisted addresses: ${proposedBlockCount}`);
