@@ -6,19 +6,16 @@
 	- Build array of block proposers during epoch, increment 1 per block produced
 	- Given total epoch reward, calculate reward for each proposer based on percentage of blocks proposed during epoch
 	- Write amounts to CSV (epoch_rewards.csv)
+	- Utilizes public API endpoint to retrieve list of proposers rather than local SQLite database
 	- START and END must be dates in format YYYY-MM-DD
 
 	Usage: node epoch_calc.js -s START -e END -r EPOCHREWARD -f FILENAME [-b <blacklist.csv>]
 
 */
 
-import algosdk from 'algosdk';
+import fs from 'fs';
 import minimist from 'minimist';
-import { algod } from '../include/algod.js';
-import { sleep, fetchBlacklist, writeToCSV, getClosestBlock } from '../include/utils.js';
-import sqlite3 from 'sqlite3';
-
-const db = new sqlite3.Database('proposers.db');
+import { fetchBlacklist, writeToCSV, validateFile, csvToJson } from '../include/utils.js';
 
 // show help menu and exit
 export const exitMenu = (err) => {
@@ -53,12 +50,12 @@ export const getFilenameArguments = () => {
     }
 
     // pull in additional blacklist addresses from API
-    try {
+    /*try {
         const blacklistFromApi = await fetchBlacklist();
         blacklist = blacklist.concat(blacklistFromApi);
     } catch (error) {
         exitMenu(`Unable to fetch blacklist from API: `, error);
-    }
+    }*/
 	blacklist = blacklist.map(item => item.account);
 
 	let proposers = {};

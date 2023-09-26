@@ -12,12 +12,19 @@ function fetchBlacklist() {
     $jsonData = json_decode($response, true);
     $combinedAddresses = array_merge(array_keys($jsonData['bparts']), array_keys($jsonData['bots']));
 
+    // read in blacklist from blacklist.csv
+   $fp = fopen('blacklist.csv','r');
+   while (($data = fgetcsv($fp, 0, ",")) !== FALSE) {
+      if (strlen(trim($data[0])) > 0) {
+         $combinedAddresses[] = trim($data[0]);
+      }
+   }
     return $combinedAddresses;
 }
 
 // Get the start and end timestamps from the GET request
-$startTimestamp = $_GET['start'];
-$endTimestamp = $_GET['end'];
+$startTimestamp = $_GET['start'].'T00:00:00Z';
+$endTimestamp = $_GET['end'].'T23:59:59Z';
 
 // Open the SQLite3 database
 $db = new SQLite3('proposers.db');

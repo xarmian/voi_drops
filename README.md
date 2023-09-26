@@ -30,8 +30,16 @@ The database is used to store block information and acts as a local cache.
 `START` and `END` may be block numbers or dates. If a date is provided, the script will automatically
 locate the first block available on the `START` date and the last block available on the `END` date
 
-Usage: `node epoch_calc.js -s START -e END -r EPOCHREWARD [-f FILENAME]`  
-Example: `node epoch_calc.js -s 240000 -e 250000 -r 2500000 -f rewards.csv`
+Usage: `node epoch_calc.js -s START -e END -r EPOCHREWARD [-f FILENAME] [-b BLACKLIST]`  
+Example: `node epoch_calc.js -s 240000 -e 250000 -r 2500000 -f rewards.csv -b blacklist.csv`
+
+# Epoch reward calculation from API - epoch_calc_api.js
+
+Similar to `epoch_calc.js` but instead of using a local SQLite database, it will
+use an API to retrieve block proposers.
+
+Usage: `node epoch_calc_api.js -s START -e END -r EPOCHREWARD [-f FILENAME] [-b BLACKLIST]`  
+Example: `node epoch_calc_api.js -s 240000 -e 250000 -r 2500000 -f rewards.csv -b blacklist.csv`
 
 # Account bucketing scirpt - buckets.js
 
@@ -54,6 +62,14 @@ block produced between 12:00:00AM and 11:59:59PM GMT, and will output the comman
 
 Usage: `node find_block.js -t TIMESTAMP`  
 Example: `node find_block.js -t 2023-09-19`
+
+# Block scraper - block_follower.js
+
+This utility script builds out a local SQLite database named `proposers.db` by pulling block data from API endpoints.
+It stores the block number, proposer, and block timestamp in the database to be used by `epoch_calc.js` and the
+proposers API.
+
+Usage: `node block_follower.js`
 
 # Node Configuration
 
