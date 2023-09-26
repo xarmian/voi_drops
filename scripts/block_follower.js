@@ -25,12 +25,6 @@ async function getHighestStoredBlock() {
     });
 }
 
-const timeoutPromise = new Promise((resolve, reject) => {
-    setTimeout(() => {
-        reject(new Error('Request timed out'));
-    }, 5000); // 5 second timeout
-});
-
 (async () => {
     const highestStoredBlock = await getHighestStoredBlock();
     console.log(`Highest stored block in the database: ${highestStoredBlock}`);
@@ -55,6 +49,12 @@ const timeoutPromise = new Promise((resolve, reject) => {
 		process.stdout.write(`Retrieving block ${i} (${end_block - i} behind)`);
         
         try {
+            const timeoutPromise = new Promise((resolve, reject) => {
+                setTimeout(() => {
+                    reject(new Error('Request timed out'));
+                }, 5000); // 5 second timeout
+            });
+
             const blk = await Promise.race([algod.block(i).do(), timeoutPromise]);
             const addr = algosdk.encodeAddress(blk["cert"]["prop"]["oprop"]);
             const timestamp = new Date(blk.block.ts*1000).toISOString();
@@ -64,9 +64,12 @@ const timeoutPromise = new Promise((resolve, reject) => {
         } catch (error) {
             process.stdout.clearLine();
             process.stdout.cursorTo(0);
-            process.stdout.write(`Error retrieving block ${i} from API, retrying.`);
+            if (error.message === 'Request timed out') {
+                process.stdout.write(`Error retrieving block ${i} from API: request timed out, retrying.`);
+            } else {
+                process.stdout.write(`Error retrieving block ${i} from API: ${error.message}, retrying.`);
+            }
             await sleep(10000); // wait 10 seconds before trying again
-            //i--;  // Decrement the block counter to retry the same block after sleeping.
             continue;
         }
 	
