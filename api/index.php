@@ -23,8 +23,8 @@ function fetchBlacklist() {
 }
 
 // Get the start and end timestamps from the GET request
-$startTimestamp = $_GET['start'].'T00:00:00Z';
-$endTimestamp = $_GET['end'].'T23:59:59Z';
+$startTimestamp = (isset($_GET['start'])) ? $_GET['start'].'T00:00:00Z' : null;
+$endTimestamp = (isset($_GET['end'])) ? $_GET['end'].'T23:59:59Z' : null;
 
 // Open the SQLite3 database
 $db = new SQLite3('proposers.db');
