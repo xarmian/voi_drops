@@ -25,6 +25,12 @@ async function getHighestStoredBlock() {
     });
 }
 
+const timeoutPromise = new Promise((resolve, reject) => {
+    setTimeout(() => {
+        reject(new Error('Request timed out'));
+    }, 5000); // 5 second timeout
+});
+
 (async () => {
     const highestStoredBlock = await getHighestStoredBlock();
     console.log(`Highest stored block in the database: ${highestStoredBlock}`);
@@ -48,12 +54,8 @@ async function getHighestStoredBlock() {
 		process.stdout.cursorTo(0);
 		process.stdout.write(`Retrieving block ${i} (${end_block - i} behind)`);
         
-        /*const blocks = await algod.searchForBlocks(i,i+100).do();
-        console.log(blocks);
-        process.exit();*/
-
         try {
-            const blk = await algod.block(i).do();
+            const blk = await Promise.race([algod.block(i).do(), timeoutPromise]);
             const addr = algosdk.encodeAddress(blk["cert"]["prop"]["oprop"]);
             const timestamp = new Date(blk.block.ts*1000).toISOString();
 
