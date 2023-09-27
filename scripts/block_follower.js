@@ -39,7 +39,15 @@ async function getHighestStoredBlock() {
             process.stdout.cursorTo(0);
             process.stdout.write(`Reached end of chain, sleeping for 10 seconds...`);
             await sleep(10000);
-            end_block = (await algod.status().do())['last-round'];
+            try {
+                end_block = (await algod.status().do())['last-round'];
+            }
+            catch (error) {
+                process.stdout.clearLine();
+                process.stdout.cursorTo(0);
+                process.stdout.write(`Error retrieving end block from API: ${error.message}, retrying.`);
+                await sleep(10000); // wait 10 seconds before trying again
+            }
             continue;
         }
 		let i = last_block + 1;
