@@ -34,6 +34,7 @@ locate the first block available on the `START` date and the last block availabl
 
 Usage: `node epoch_calc.js -s START -e END -r EPOCHREWARD [-f FILENAME] [-b BLACKLIST]`  
 Example: `node epoch_calc.js -s 240000 -e 250000 -r 2500000 -f rewards.csv -b blacklist.csv`
+Example: `node epoch_calc.js -s 2023-09-25 -e 2023-10-01 -r 2500000 -f rewards.csv -b blacklist.csv`
 
 # Epoch reward calculation from API - epoch_calc_api.js
 
@@ -42,6 +43,7 @@ use an API to retrieve block proposers.
 
 Usage: `node epoch_calc_api.js -s START -e END -r EPOCHREWARD [-f FILENAME] [-b BLACKLIST]`  
 Example: `node epoch_calc_api.js -s 240000 -e 250000 -r 2500000 -f rewards.csv -b blacklist.csv`
+Example: `node epoch_calc_api.js -s 2023-09-25 -e 2023-10-01 -r 2500000 -f rewards.csv -b blacklist.csv`
 
 # Account bucketing scirpt - buckets.js
 
