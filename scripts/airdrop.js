@@ -4,7 +4,7 @@
 
     WORK IN PROGRESS DO NOT USE AS-IS
 
-	Usage: node airdrop.js -a <acctlist> [-b <blacklist>] [-g <group_size>] [-m "mnemonic"]
+	Usage: node airdrop.js -a <acctlist> [-t] [-b <blacklist>] [-g <group_size>] [-m "mnemonic"] [-n "note"]
 
     Example #1: Send one transaction per line in acctList_sample.csv, using blackList_sample.csv as the blacklist
 
@@ -13,7 +13,7 @@
     Example #2: Same as above, but send as atomic transactions with two lines from acctList_sample.csv at a time. If either
                 fails, both transactions will fail and be logged to errorFile.csv
 
-        node airdrop.js -a acctList_sample.csv -b blackList_sample.csv -g 2 -m "the mnemonic of the sending account goes here"
+        node airdrop.js -a acctList_sample.csv -b blackList_sample.csv -g 2 -m "the mnemonic of the sending account goes here" -n "this is a note"
 */
 
 import algosdk from 'algosdk';
@@ -23,7 +23,6 @@ import csvWriter from 'csv-writer';
 import { algod } from '../include/algod.js';
 import { sleep, fetchBlacklist, validateFile, removeAndTrackDuplicates, removeInvalidAddresses, sanitizeWithRemovals, csvToJson } from '../include/utils.js';
 
-const algodClient = new algosdk.Algodv2("", "https://testnet-api.voi.nodly.io", "");
 const FLAT_FEE = 1000; // flat fee amount, 1000 microvoi == .001 voi
 
 // show help menu and exit
@@ -39,15 +38,17 @@ const getFilenameArguments = () => {
     let blackList = (args.b)??=null;
     let mnemonic = (args.m)??=null;
     let testMode = (args.t)??=false;
+    let note = (args.n)??='';
     let groupSize = (args.g)??=1;
-    return [ acctList, blackList, mnemonic, testMode, groupSize ];
+    return [ acctList, blackList, mnemonic, testMode, groupSize, note ];
 }
 
-const transferTokens = async (sender,array, successStream, errorStream, groupSize) => {
+const transferTokens = async (sender,array, successStream, errorStream, groupSize, testMode, note) => {
     let successList = [];
     let errorList = [];
+    const enc = new TextEncoder();
 
-    const params = await algodClient.getTransactionParams().do();
+    const params = await algod.getTransactionParams().do();
     params.fee = FLAT_FEE;
     params.flatFee = true;
 
@@ -56,7 +57,7 @@ const transferTokens = async (sender,array, successStream, errorStream, groupSiz
 
     for (let i = 0; i < array.length; i++) {
         let obj = array[i];
-        const txn = algosdk.makePaymentTxnWithSuggestedParams(sender.addr, obj.account, parseInt(obj.tokenAmount), undefined, algosdk.encodeObj({'userType': obj.userType}),params);
+        const txn = algosdk.makePaymentTxnWithSuggestedParams(sender.addr, obj.account, parseInt(obj.tokenAmount), undefined, enc.encode(note),params);
         // Using the receiver transaction as a lease
         // This prevents the airdrop script from sending a rewards payment twice in a 1000 round range
         txn.lease = algosdk.decodeAddress(obj.account).publicKey;
@@ -79,31 +80,41 @@ const transferTokens = async (sender,array, successStream, errorStream, groupSiz
             signedTxns.push(t.signTxn(sender.sk));
         }
 
-        try {
-            const { txId } = await algod.sendRawTransaction(signedTxns).do();
-            let confirmedTxn = await waitForConfirmation(algod, txId, 8);
-            if (confirmedTxn) {
+        if (testMode) {
+            for (let o of objInGroup) {
+                successList.push(o);
+                console.log(`Test mode: Sent ${o.tokenAmount} to ${o.account}`);
+            }
+            txGroup = [];
+            objInGroup = [];
+            continue;
+        }
+        else {
+            try {
+                const { txId } = await algod.sendRawTransaction(signedTxns).do();
+                let confirmedTxn = await waitForConfirmation(algod, txId, 8);
+                if (confirmedTxn) {
+                    for (let o of objInGroup) {
+                        //o['confirmed-round'] = confirmedTxn['confirmed-round'];
+                        successList.push(o);
+                        console.log(`Sent ${o.tokenAmount} to ${o.account}`);
+                    }
+
+                    await successStream.writeRecords(objInGroup);
+                }
+            } catch (error) {
                 for (let o of objInGroup) {
-                    //o['confirmed-round'] = confirmedTxn['confirmed-round'];
-                    successList.push(o);
-                    console.log(`Sent ${o.tokenAmount} to ${o.account}`);
+                    o.error = (error && error.response && error.response.body && error.response.body.message) ? error.response.body.message : error.toString().substring(0,40);
+                    errorList.push(o);
+                    console.log(`Error sending ${o.tokenAmount} to ${o.account}: ${o.error}`);
                 }
 
-                //await writeToCSV(successList,'successList.csv');
-                await successStream.writeRecords(objInGroup);
-            }
-        } catch (error) {
-            for (let o of objInGroup) {
-                o.error = (error && error.response && error.response.body && error.response.body.message) ? error.response.body.message : error.toString().substring(0,40);
-                errorList.push(o);
-                console.log(`Error sending ${o.tokenAmount} to ${o.account}`);
+                await errorStream.writeRecords(objInGroup);
             }
 
-            await errorStream.writeRecords(objInGroup);
+            txGroup = [];
+            objInGroup = [];
         }
-
-        txGroup = [];
-        objInGroup = [];
     }
     return [ successList, errorList ];
 }
@@ -122,7 +133,7 @@ const waitForConfirmation = async (algod, txId, timeout) => {
 }
 
 (async () => {
-    let [ acctFileName, blacklistFileName, paramMnemonic, testMode, groupSize ] = getFilenameArguments();
+    let [ acctFileName, blacklistFileName, paramMnemonic, testMode, groupSize, note ] = getFilenameArguments();
 
     // handle accotFileName
     if (acctFileName == null || acctFileName == false) exitMenu('Invalid command line arguments');
@@ -174,6 +185,7 @@ const waitForConfirmation = async (algod, txId, timeout) => {
     // create success and error streams
     let headersSuccess = Object.keys(dropList[0]);
     headersSuccess.forEach((h,i) => headersSuccess[i] = { id: h, title: h });
+    headersSuccess.push({ id: 'txId', title: 'txId' });
 
     const successStream = csvWriter.createObjectCsvWriter({
         path: 'successFile.csv',
@@ -190,14 +202,8 @@ const waitForConfirmation = async (algod, txId, timeout) => {
         append: resume,
     });
 
-	const [ successDropList, errList ] = await transferTokens(sender,dropList, successStream, errorStream, groupSize);
+	const [ successDropList, errList ] = await transferTokens(sender,dropList, successStream, errorStream, groupSize, testMode, note);
     errorDropList = errorDropList.concat(errList);
-
-    /*console.log('SUCCESS LIST:');
-    console.log(successDropList);
-
-    console.log('ERROR LIST:');
-    console.log(errorDropList);*/
 
 	process.exit();
 
