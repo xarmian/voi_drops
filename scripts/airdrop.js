@@ -26,9 +26,9 @@ import { sleep, fetchBlacklist, validateFile, removeAndTrackDuplicates, removeIn
 const FLAT_FEE = 1000; // flat fee amount, 1000 microvoi == .001 voi
 
 // show help menu and exit
-export const exitMenu = (err) => {
+const exitMenu = (err) => {
 	if (err) console.log(`ERROR: ${err}`);
-	console.log(`Command: node airdrop.js -a <acctlist> [-b <blacklist>] [-g <group_size>] [-m "mnemonic of sender"]`);
+	console.log(`Usage: node airdrop.js -a <acctlist> [-b <blacklist>] [-g <group_size>] [-m "mnemonic of sender"]`);
 	process.exit();
 }
 

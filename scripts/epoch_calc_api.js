@@ -20,7 +20,7 @@ import { writeToCSV, validateFile, csvToJson } from '../include/utils.js';
 // show help menu and exit
 const exitMenu = (err) => {
 	if (err) console.log(`ERROR: ${err}`);
-	console.log(`Command: node epoch_calc.js -s STARTDATE -e ENDDATE -r EPOCHREWARD [-f FILENAME] [-b BLACKLIST]`);
+	console.log(`Usage: node epoch_calc.js -s STARTDATE -e ENDDATE -r EPOCHREWARD [-f FILENAME] [-b BLACKLIST]`);
 	process.exit();
 }
 

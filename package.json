@@ -4,7 +4,12 @@
   "description": "Reward airdrop script for block proposers",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "airdrop": "node scripts/airdrop.js",
+    "epoch_calc_api": "node scripts/epoch_calc_api.js",
+    "epoch_calc": "node scripts/epoch_calc.js",
+    "block_follower": "node scripts/block_follower.js",
+    "buckets": "node scripts/buckets.js"
   },
   "type": "module",
   "author": "",
@@ -13,6 +18,7 @@
     "algosdk": "^2.4.0",
     "config": "^3.3.9",
     "csv-writer": "^1.6.0",
+    "dotenv": "^16.3.1",
     "fast-csv": "^4.3.6",
     "minimist": "^1.2.8",
     "node-fetch": "^3.3.2",

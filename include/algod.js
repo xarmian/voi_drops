@@ -1,4 +1,5 @@
 import algosdk from 'algosdk';
+import 'dotenv/config';
 
 // destruct from env vars, with default values to nodly
 const {

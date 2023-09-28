@@ -25,7 +25,7 @@ const db = new sqlite3.Database('proposers.db');
 // show help menu and exit
 export const exitMenu = (err) => {
 	if (err) console.log(`ERROR: ${err}`);
-	console.log(`Command: node epoch_calc.js -s STARTTIME -e ENDTIME -r EPOCHREWARD -f FILENAME`);
+	console.log(`Usage: node epoch_calc.js -s STARTTIME -e ENDTIME -r EPOCHREWARD -f FILENAME`);
 	process.exit();
 }
 
