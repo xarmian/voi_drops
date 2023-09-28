@@ -1,9 +1,28 @@
 import sqlite3 from 'sqlite3';
 import algosdk from 'algosdk';
 import { algod } from '../include/algod.js';
+import minimist from 'minimist';
 
-const db = new sqlite3.Database('proposers.db');
+const args = minimist(process.argv.slice(2));
+let filename = (args.f)??='proposers.db';
+
+const db = new sqlite3.Database(filename);
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+function createBlocksTableIfNotExists() {
+    return new Promise((resolve, reject) => {
+        db.run(`
+            CREATE TABLE IF NOT EXISTS blocks (
+                block INTEGER PRIMARY KEY,
+                proposer VARCHAR(58),
+				timestamp DATETIME DEFAULT '0000-00-00 00:00:00'
+            )
+        `, err => {
+            if (err) return reject(err);
+            resolve();
+        });
+    });
+}
 
 function storeBlockInDb(block, proposer, timestamp) {
     return new Promise((resolve, reject) => {
@@ -26,6 +45,9 @@ async function getHighestStoredBlock() {
 }
 
 (async () => {
+	// Ensure the blocks table exists
+	await createBlocksTableIfNotExists();
+
     const highestStoredBlock = await getHighestStoredBlock();
     console.log(`Highest stored block in the database: ${highestStoredBlock}`);
 
