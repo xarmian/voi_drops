@@ -15,16 +15,16 @@
 
 import fs from 'fs';
 import minimist from 'minimist';
-import { fetchBlacklist, writeToCSV, validateFile, csvToJson } from '../include/utils.js';
+import { writeToCSV, validateFile, csvToJson } from '../include/utils.js';
 
 // show help menu and exit
-export const exitMenu = (err) => {
+const exitMenu = (err) => {
 	if (err) console.log(`ERROR: ${err}`);
 	console.log(`Command: node epoch_calc.js -s STARTDATE -e ENDDATE -r EPOCHREWARD [-f FILENAME] [-b BLACKLIST]`);
 	process.exit();
 }
 
-export const getFilenameArguments = () => {
+const getFilenameArguments = () => {
     const args = minimist(process.argv.slice(2));
     let start_date = (args.s)??=null;
     let end_date = (args.e)??=null;
@@ -42,6 +42,7 @@ export const getFilenameArguments = () => {
 	}
 
     // handle blacklist
+    // api automatically accounts for its own blackli
     let blacklist = []; // list of addresses to not send to
     if (blacklistFileName != null && blacklistFileName != false) {
         if (fs.existsSync(blacklistFileName) && validateFile(blacklistFileName)) {
@@ -49,13 +50,7 @@ export const getFilenameArguments = () => {
         }
     }
 
-    // pull in additional blacklist addresses from API
-    /*try {
-        const blacklistFromApi = await fetchBlacklist();
-        blacklist = blacklist.concat(blacklistFromApi);
-    } catch (error) {
-        exitMenu(`Unable to fetch blacklist from API: `, error);
-    }*/
+	// map blacklist to array of addresses
 	blacklist = blacklist.map(item => item.account);
 
 	let proposers = {};

@@ -13,12 +13,14 @@ function fetchBlacklist() {
     $combinedAddresses = array_merge(array_keys($jsonData['bparts']), array_keys($jsonData['bots']));
 
     // read in blacklist from blacklist.csv
-   $fp = fopen('blacklist.csv','r');
-   while (($data = fgetcsv($fp, 0, ",")) !== FALSE) {
-      if (strlen(trim($data[0])) > 0) {
-         $combinedAddresses[] = trim($data[0]);
-      }
-   }
+   if (file_exists('blacklist.csv')) {
+	   $fp = fopen('blacklist.csv','r');
+	   while (($data = fgetcsv($fp, 0, ",")) !== FALSE) {
+	      if (strlen(trim($data[0])) > 0) {
+        	 $combinedAddresses[] = trim($data[0]);
+	      }
+	   }
+    }
     return $combinedAddresses;
 }
 
@@ -27,7 +29,7 @@ $startTimestamp = (isset($_GET['start'])) ? $_GET['start'].'T00:00:00Z' : null;
 $endTimestamp = (isset($_GET['end'])) ? $_GET['end'].'T23:59:59Z' : null;
 
 // Open the SQLite3 database
-$db = new SQLite3('proposers.db');
+$db = new SQLite3('/db/proposers.db');
 
 // If the start or end timestamps are not set, return the high and low timestamps from the database
 if ($startTimestamp == null || $endTimestamp == null) {
