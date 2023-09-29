@@ -14,6 +14,11 @@
                 fails, both transactions will fail and be logged to errorFile.csv
 
         node airdrop.js -a acctList_sample.csv -b blackList_sample.csv -g 2 -m "the mnemonic of the sending account goes here" -n "this is a note"
+
+    TO DO: 
+    - Calculate and display total number of tokens to be sent
+    - Calculate and display total number of wallets to be sent
+    
 */
 
 import algosdk from 'algosdk';
@@ -56,65 +61,60 @@ const transferTokens = async (sender,array, successStream, errorStream, groupSiz
     let objInGroup = [];
 
     for (let i = 0; i < array.length; i++) {
-        let obj = array[i];
-        const txn = algosdk.makePaymentTxnWithSuggestedParams(sender.addr, obj.account, parseInt(obj.tokenAmount), undefined, enc.encode(note),params);
-        // Using the receiver transaction as a lease
-        // This prevents the airdrop script from sending a rewards payment twice in a 1000 round range
-        txn.lease = algosdk.decodeAddress(obj.account).publicKey;
+        try {
+            let obj = array[i];
+            const txn = algosdk.makePaymentTxnWithSuggestedParams(sender.addr, obj.account, parseInt(obj.tokenAmount), undefined, enc.encode(note),params);
+            // Using the receiver transaction as a lease
+            // This prevents the airdrop script from sending a rewards payment twice in a 1000 round range
+            txn.lease = algosdk.decodeAddress(obj.account).publicKey;
 
-        txGroup.push(txn);
-        objInGroup.push(obj);
+            txGroup.push(txn);
+            objInGroup.push(obj);
 
-        // if group isn't full and its not the last transaction, continue filling group
-        if (groupSize < 1) groupSize = 1;
-        if (txGroup.length < groupSize && i < (array.length-1)) continue;
-        
-        // assign group ID
-        algosdk.assignGroupID(txGroup);
+            // if group isn't full and its not the last transaction, continue filling group
+            if (groupSize < 1) groupSize = 1;
+            if (txGroup.length < groupSize && i < (array.length-1)) continue;
+            
+            // assign group ID
+            algosdk.assignGroupID(txGroup);
 
-        // sign transactions
-        const signedTxns = [];
-        for (let tid in txGroup) {
-            let t = txGroup[tid];
-            objInGroup[tid].txId = t.txID().toString();
-            signedTxns.push(t.signTxn(sender.sk));
-        }
-
-        if (testMode) {
-            for (let o of objInGroup) {
-                successList.push(o);
-                console.log(`Test mode: Sent ${o.tokenAmount} to ${o.account}`);
+            // sign transactions
+            const signedTxns = [];
+            for (let tid in txGroup) {
+                let t = txGroup[tid];
+                objInGroup[tid].txId = t.txID().toString();
+                signedTxns.push(t.signTxn(sender.sk));
             }
-            txGroup = [];
-            objInGroup = [];
-            continue;
-        }
-        else {
-            try {
+
+            if (testMode) {
+                for (let o of objInGroup) {
+                    successList.push(o);
+                    console.log(`Test mode: Sent ${o.tokenAmount} to ${o.account}`);
+                }
+            }
+            else {
                 const { txId } = await algod.sendRawTransaction(signedTxns).do();
                 let confirmedTxn = await waitForConfirmation(algod, txId, 8);
                 if (confirmedTxn) {
                     for (let o of objInGroup) {
-                        //o['confirmed-round'] = confirmedTxn['confirmed-round'];
                         successList.push(o);
                         console.log(`Sent ${o.tokenAmount} to ${o.account}`);
                     }
 
                     await successStream.writeRecords(objInGroup);
                 }
-            } catch (error) {
-                for (let o of objInGroup) {
-                    o.error = (error && error.response && error.response.body && error.response.body.message) ? error.response.body.message : error.toString().substring(0,40);
-                    errorList.push(o);
-                    console.log(`Error sending ${o.tokenAmount} to ${o.account}: ${o.error}`);
-                }
-
-                await errorStream.writeRecords(objInGroup);
             }
-
-            txGroup = [];
-            objInGroup = [];
+        } catch (error) {
+            for (let o of objInGroup) {
+                o.error = (error && error.response && error.response.body && error.response.body.message) ? error.response.body.message : error.toString().substring(0,40);
+                errorList.push(o);
+                console.log(`Error sending ${o.tokenAmount} to ${o.account}: ${o.error}`);
+            }
+            await errorStream.writeRecords(objInGroup);
         }
+
+        txGroup = [];
+        objInGroup = [];
     }
     return [ successList, errorList ];
 }

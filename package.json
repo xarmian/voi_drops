@@ -5,11 +5,13 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "npm run menu",
     "airdrop": "node scripts/airdrop.js",
     "epoch_calc_api": "node scripts/epoch_calc_api.js",
     "epoch_calc": "node scripts/epoch_calc.js",
     "block_follower": "node scripts/block_follower.js",
-    "buckets": "node scripts/buckets.js"
+    "buckets": "node scripts/buckets.js",
+    "menu": "echo \"Usage: npm run [script]\n\nAvailable scripts:\nairdrop\nepoch_calc_api\nepoch_calc\nblock_follower\nbuckets\""
   },
   "type": "module",
   "author": "",

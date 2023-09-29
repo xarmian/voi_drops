@@ -26,15 +26,22 @@ function createBlocksTableIfNotExists() {
 
 function storeBlockInDb(block, proposer, timestamp) {
     return new Promise((resolve, reject) => {
-        const stmt = db.prepare("INSERT OR REPLACE INTO blocks (block, proposer, timestamp) VALUES (?, ?, ?)");
-        stmt.run(block, proposer, timestamp, err => {
-            if (err) return reject(err);
-            resolve();
+        db.serialize(() => {
+            db.run('BEGIN TRANSACTION');
+
+            const stmt = db.prepare("INSERT OR REPLACE INTO blocks (block, proposer, timestamp) VALUES (?, ?, ?)");
+            stmt.run(block, proposer, timestamp, err => {
+                if (err) {
+                    db.run('ROLLBACK');
+                    return reject(err);
+                }
+                db.run('COMMIT');
+                resolve();
+            });
+            stmt.finalize();
         });
-        stmt.finalize();
     });
 }
-
 async function getHighestStoredBlock() {
     return new Promise((resolve, reject) => {
         db.get("SELECT MAX(block) as highestBlock FROM blocks", [], (err, row) => {
