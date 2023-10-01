@@ -2,6 +2,30 @@ This repository contains a set of scripts to perform airdrop functions for the V
 
 All scripts are executed using `npm run` as detailed below. The programs are stored in the `/scripts` folder.
 
+# Quick Start Instructions to Execute an Airdrop
+1. Clone this repo:
+```
+git clone https://github.com/xarmian/voi_drops.git
+```
+
+2. Change to voi_drops folder and install dependencies:
+```
+cd voi_drops
+npm i
+```
+
+3. Download the applicable reward file from https://xarmian.github.io/voi_rewards/
+
+4. Run a test airdrop
+```
+npm run airdrop -- -a all_rewards.csv -g 16 -n "This is an airdrop note" -t
+```
+
+5. Looks good? Run for real:
+```
+npm run airdrop -- -a all_rewards.csv -g 16 -n "This is an airdrop note"
+```
+
 # Airdrop script - airdrop.js
 Performs an airdrop of network tokens to the accounts in `<acctlist>`,
 which is a CSV file containing three columns -- account address, account type, and atomic amount
