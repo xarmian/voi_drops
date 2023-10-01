@@ -18,7 +18,7 @@
     TO DO: 
     - Calculate and display total number of tokens to be sent
     - Calculate and display total number of wallets to be sent
-    
+
 */
 
 import algosdk from 'algosdk';
@@ -63,7 +63,18 @@ const transferTokens = async (sender,array, successStream, errorStream, groupSiz
     for (let i = 0; i < array.length; i++) {
         try {
             let obj = array[i];
-            const txn = algosdk.makePaymentTxnWithSuggestedParams(sender.addr, obj.account, parseInt(obj.tokenAmount), undefined, enc.encode(note),params);
+
+            if (obj.note !== undefined && note !== undefined) {
+                try {
+                    obj.note = JSON.parse(obj.note);
+                    obj.note['note'] = note;
+                    obj.note = JSON.stringify(obj.note);
+                } catch (e) {
+                    // obj.note is not json, ignore
+                }
+            }
+
+            const txn = algosdk.makePaymentTxnWithSuggestedParams(sender.addr, obj.account, parseInt(obj.tokenAmount), undefined, enc.encode(obj.note || note),params);
             // Using the receiver transaction as a lease
             // This prevents the airdrop script from sending a rewards payment twice in a 1000 round range
             txn.lease = algosdk.decodeAddress(obj.account).publicKey;
@@ -179,6 +190,10 @@ const waitForConfirmation = async (algod, txId, timeout) => {
     const sender = algosdk.mnemonicToSecretKey(paramMnemonic??=process.env.MNEMONIC);
     const origDropList = sanitizeWithRemovals(await csvToJson(acctFileName), removeList);
 
+    const senderAccountInfo = await algod.accountInformation(sender.addr).do();
+    console.log(`Sender account ID: ${sender.addr}`);
+    console.log(`Sender balance: ${senderAccountInfo.amount}`);
+
 	let [ dropList, errorDropList ] = removeAndTrackDuplicates(origDropList);
     [ dropList, errorDropList ] = removeInvalidAddresses(dropList, errorDropList);
 
@@ -193,8 +208,9 @@ const waitForConfirmation = async (algod, txId, timeout) => {
         append: resume,
     });
 
-    let headersError = Object.keys(errorDropList[0]);
+    let headersError = Object.keys(dropList[0]);
     headersError.forEach((h,i) => headersError[i] = { id: h, title: h });
+    headersError.push({ id: 'error', title: 'error' });
 
     const errorStream = csvWriter.createObjectCsvWriter({
         path: 'errorFile.csv',
