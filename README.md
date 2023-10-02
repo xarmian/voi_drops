@@ -16,6 +16,15 @@ npm i
 
 3. Download the applicable reward file from https://xarmian.github.io/voi_rewards/
 
+OR download the file using CURL with the following command:
+```
+curl -G -o all_rewards.csv "https://socksfirstgames.com/proposers/csv.php" \
+    -d start="2023-09-25" \
+    -d end="2023-10-01" \
+    -d block_reward=12500000 \
+    -d health_reward=10000000
+```
+
 4. Run a test airdrop
 ```
 npm run airdrop -- -a all_rewards.csv -g 16 -n "This is an airdrop note" -t
