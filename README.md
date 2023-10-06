@@ -25,12 +25,17 @@ curl -G -o all_rewards.csv "https://socksfirstgames.com/proposers/csv.php" \
     -d health_reward=10000000
 ```
 
-4. Run a test airdrop
+4. Add mnemonic to .env file. Copy the file `.env.sample` to `.env`, edit the file, and change the line:
+```# MNEMONIC=```
+to
+```MNEMONIC=your mnemonic goes here```
+
+5. Run a test airdrop
 ```
 npm run airdrop -- -a all_rewards.csv -g 16 -n "This is an airdrop note" -t
 ```
 
-5. Looks good? Run for real:
+6. Looks good? Run for real:
 ```
 npm run airdrop -- -a all_rewards.csv -g 16 -n "This is an airdrop note"
 ```
