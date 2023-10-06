@@ -25,9 +25,9 @@ curl -G -o all_rewards.csv "https://socksfirstgames.com/proposers/csv.php" \
     -d health_reward=10000000
 ```
 
-4. Add mnemonic to .env file. Copy the file `.env.sample` to `.env`, edit the file, and change the line:
+4. Add mnemonic to .env file. Copy the file `.env.sample` to `.env`, edit the file, and change the line: 
 ```# MNEMONIC=```
-to
+to 
 ```MNEMONIC=your mnemonic goes here```
 
 5. Run a test airdrop
