@@ -24,22 +24,40 @@ function fetchBlacklist() {
     return $combinedAddresses;
 }
 
-function fetchWeeklyHealth($blacklist) {
-    $weeklyHealthEndpoint = 'health_week.json';
+function fetchWeeklyHealth($blacklist, $date) {
+    $healthDir = '/app/proposers/history';
+    $healthFiles = glob($healthDir . '/health_week_*.json');
+    rsort($healthFiles);
+    $latestFile = null;
 
-    $response = file_get_contents($weeklyHealthEndpoint);
-    if (!$response) {
-        throw new Exception('HTTP error!');
+    foreach ($healthFiles as $file) {
+        if (filesize($file) > 1024) {
+            $fileDate = substr(basename($file, '.json'), -8);
+            if ($fileDate <= $date) {
+                $latestFile = $file;
+                break;
+            }
+        }
     }
 
-    $jsonData = json_decode($response, true);
+    if (!$latestFile) {
+        $data = array();
+    }
+    else {
+        $response = file_get_contents($latestFile);
+        if (!$response) {
+            throw new Exception('HTTP error!');
+        }
 
-    $meta = $jsonData['meta'];
-    $data = $jsonData['data'];
+        $jsonData = json_decode($response, true);
 
-    $positions = array('host'=>null,'name'=>null,'score'=>null,'addresses'=>array());
-    foreach($meta as $pos=>$m) {
-        $positions[$m['name']] = $pos;
+        $meta = $jsonData['meta'];
+        $data = $jsonData['data'];
+
+        $positions = array('host'=>null,'name'=>null,'score'=>null,'addresses'=>array());
+        foreach($meta as $pos=>$m) {
+            $positions[$m['name']] = $pos;
+        }
     }
 
     $nodes = array();
@@ -140,7 +158,7 @@ $data = array();
 $blacklist = fetchBlacklist();
 
 // Fetch weekly health data
-$health = fetchWeeklyHealth($blacklist);
+$health = fetchWeeklyHealth($blacklist,date('Ymd', strtotime('+1 day', strtotime($endTimestamp))));
 
 // Loop through the results and add the data to the array
 while ($row = $results->fetchArray(SQLITE3_ASSOC)) {
