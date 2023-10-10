@@ -45,6 +45,7 @@ function fetchWeeklyHealth($blacklist) {
     $nodes = array();
     $totalNodeCount = 0;
     $healthyNodeCount = 0;
+    $qualifyNodeCount = 0;
     $emptyNodeCount = 0;
 
     foreach($data as $d) {
@@ -59,10 +60,15 @@ function fetchWeeklyHealth($blacklist) {
             'name' => $d[$positions['name']],
             'score' => $d[$positions['score']],
             'addresses' => $d[$positions['addresses']],
+            'hours' => $d[$positions['hours']]
         );
 
         if ($d[$positions['score']] >= 5.0) {
             $healthyNodeCount++;
+            if ((int)$d[$positions['hours']] >= 168) {
+                 $qualifyNodeCount++;
+            }
+
         }
 
         $totalNodeCount++;
@@ -76,7 +82,7 @@ function fetchWeeklyHealth($blacklist) {
         }
         foreach($node['addresses'] as $address) {
             if (isset($addresses[$address])) {
-                $addresses[$address]['divisor'] = min(count($node['addresses'],$addresses[$address]['divisor']));
+                $addresses[$address]['divisor'] = min(count($node['addresses']),$addresses[$address]['divisor']);
             }
             else {
                 $addresses[$address] = $node;
@@ -91,6 +97,7 @@ function fetchWeeklyHealth($blacklist) {
         'total_node_count'=>$totalNodeCount,
         'healthy_node_count'=>$healthyNodeCount,
         'empty_node_count'=>$emptyNodeCount,
+        'qualify_node_count'=>$qualifyNodeCount,
     );
 }
 
@@ -148,6 +155,7 @@ while ($row = $results->fetchArray(SQLITE3_ASSOC)) {
             'node_name' => isset($health['addresses'][$row['proposer']]) ? $health['addresses'][$row['proposer']]['name'] : null,
             'health_score' => isset($health['addresses'][$row['proposer']]) ? $health['addresses'][$row['proposer']]['score'] : null,
             'health_divisor' => isset($health['addresses'][$row['proposer']]) ? $health['addresses'][$row['proposer']]['divisor'] : null,
+            'health_hours' => isset($health['addresses'][$row['proposer']]) ? $health['addresses'][$row['proposer']]['hours'] : null,
         ),
     );
 
@@ -167,6 +175,7 @@ foreach($health['addresses'] as $address=>$node) {
             'node_name' => $node['name'],
             'health_score' => $node['score'],
             'health_divisor' => $node['divisor'],
+            'health_hours' => $node['hours'],
         ),
     );
 }
@@ -189,6 +198,7 @@ $output = array(
     'total_node_count' => $health['total_node_count'],
     'healthy_node_count' => $health['healthy_node_count'],
     'empty_node_count' => $health['empty_node_count'],
+    'qualify_node_count' => $health['qualify_node_count'],
 );
 
 // Convert the output to a JSON object and output it
