@@ -125,6 +125,7 @@ $endTimestamp = (isset($_GET['end'])) ? $_GET['end'].'T23:59:59Z' : null;
 
 // Open the SQLite3 database
 $db = new SQLite3('/db/proposers.db');
+$db->busyTimeout(5000);
 
 // If the start or end timestamps are not set, return the high and low timestamps from the database
 if ($startTimestamp == null || $endTimestamp == null) {
