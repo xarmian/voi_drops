@@ -179,7 +179,10 @@ const waitForConfirmation = async (algod, txId, timeout) => {
 
     let alreadySent = [];
     let resume = false;
-    const successFileName = 'successFile.csv';
+
+    const currentDate = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const successFileName = `successFile_${currentDate}.csv`;
+
     if (fs.existsSync(successFileName) && validateFile(successFileName)) {
         resume = true;
         alreadySent = await csvToJson(successFileName);
@@ -203,7 +206,7 @@ const waitForConfirmation = async (algod, txId, timeout) => {
     headersSuccess.push({ id: 'txId', title: 'txId' });
 
     const successStream = csvWriter.createObjectCsvWriter({
-        path: 'successFile.csv',
+        path: successFileName,
         header: headersSuccess,
         append: resume,
     });

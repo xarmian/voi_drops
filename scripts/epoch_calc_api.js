@@ -72,7 +72,11 @@ const getFilenameArguments = () => {
             let totalWallets = 0;
 
 			dataArrays.forEach(row => {
-				if (blacklist.includes(row.proposer)) return;
+				if (blacklist.includes(row.proposer)) {
+					// if proposer is in blacklist and health_divisor == 1, subtract from healthy_node_count
+					if (row.node.health_divisor == 1) healthy_node_count--;
+					return;
+				}
 				proposers[row.proposer] = { 
 					blocks: row.block_count,
 					health_score: row.node.health_score,
