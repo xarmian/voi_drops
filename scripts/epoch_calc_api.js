@@ -43,7 +43,7 @@ const getFilenameArguments = () => {
 	}
 
     // handle blacklist
-    // api automatically accounts for its own blackli
+    // api automatically accounts for its own blacklist
     let blacklist = []; // list of addresses to not send to
     if (blacklistFileName != null && blacklistFileName != false) {
         if (fs.existsSync(blacklistFileName) && validateFile(blacklistFileName)) {
@@ -58,7 +58,10 @@ const getFilenameArguments = () => {
 	let proposedBlockCount = 0;
 	let healthy_node_count = 0;
 
-    const url = `https://socksfirstgames.com/proposers/?start=${start_date}&end=${end_date}`;
+    let url = `https://socksfirstgames.com/proposers/?start=${start_date}&end=${end_date}`;
+	
+	// add blacklist to url
+	if (blacklist.length > 0) url += `&blacklist=${blacklist.join(',')}`;
 
     await fetch(url,{cache: "no-store"})
         .then(response => response.json())

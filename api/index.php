@@ -12,14 +12,19 @@ function fetchBlacklist() {
     $jsonData = json_decode($response, true);
     $combinedAddresses = array_merge(array_keys($jsonData['bparts']), array_keys($jsonData['bots']));
 
-    // read in blacklist from blacklist.csv
-   if (file_exists('blacklist.csv')) {
-	   $fp = fopen('blacklist.csv','r');
-	   while (($data = fgetcsv($fp, 0, ",")) !== FALSE) {
-	      if (strlen(trim($data[0])) > 0) {
-        	 $combinedAddresses[] = trim($data[0]);
-	      }
-	   }
+    // Check if blacklist is provided as a URL request parameter
+    if (isset($_GET['blacklist'])) {
+        $combinedAddresses = explode(',', trim($_GET['blacklist']));
+    } else {
+        // read in blacklist from blacklist.csv
+        if (file_exists('blacklist.csv')) {
+            $fp = fopen('blacklist.csv','r');
+            while (($data = fgetcsv($fp, 0, ",")) !== FALSE) {
+                if (strlen(trim($data[0])) > 0) {
+                    $combinedAddresses[] = trim($data[0]);
+                }
+            }
+        }
     }
     return $combinedAddresses;
 }
