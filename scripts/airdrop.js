@@ -30,6 +30,10 @@ import { sleep, fetchBlacklist, validateFile, removeAndTrackDuplicates, removeIn
 
 const FLAT_FEE = 1000; // flat fee amount, 1000 microvoi == .001 voi
 
+const atomicToDisplay = (amount) => {
+    return amount / Math.pow(10,6);
+}
+
 // show help menu and exit
 const exitMenu = (err) => {
 	if (err) console.log(`ERROR: ${err}`);
@@ -64,6 +68,9 @@ const transferTokens = async (sender,array, successStream, errorStream, groupSiz
         try {
             let obj = array[i];
 
+            // skip zero token amounts
+            if (obj.tokenAmount <= 0) continue;
+            
             if (obj.note !== undefined && note !== undefined) {
                 try {
                     obj.note = JSON.parse(obj.note);
@@ -195,10 +202,45 @@ const waitForConfirmation = async (algod, txId, timeout) => {
 
     const senderAccountInfo = await algod.accountInformation(sender.addr).do();
     console.log(`Sender account ID: ${sender.addr}`);
-    console.log(`Sender balance: ${senderAccountInfo.amount}`);
+    console.log(`Sender balance: ${atomicToDisplay(senderAccountInfo.amount)}`);
 
 	let [ dropList, errorDropList ] = removeAndTrackDuplicates(origDropList);
     [ dropList, errorDropList ] = removeInvalidAddresses(dropList, errorDropList);
+
+    // check senderAccountInfo.amount against total tokens to be sent
+    let totalTokens = 0;
+    for (let obj of dropList) {
+        totalTokens += Number(obj.tokenAmount);
+    }
+
+    const estimateTxFees = dropList.length * FLAT_FEE;
+
+    // adding one to totalTokens to account for transaction fee
+    if (senderAccountInfo.amount < (totalTokens+estimateTxFees)) {
+        exitMenu(`Sender account balance (${senderAccountInfo.amount}) is less than total tokens to be sent (${totalTokens})`);
+    };
+
+    // display total tokens to be sent
+    console.log(`Total tokens to be sent: ${atomicToDisplay(totalTokens)}`);
+    console.log(`Estimated tx fees: ${atomicToDisplay(estimateTxFees)}`);
+    console.log(`Total wallets: ${dropList.length}`);
+    console.log('');
+    
+    // pause for enter key press to continue
+    console.log('Press ENTER to continue, Q to quit...');
+    await new Promise(resolve => {
+        process.stdin.setRawMode(true);
+        process.stdin.resume();
+        process.stdin.on('data', function listener(chunk) {
+            process.stdin.pause();
+            process.stdin.removeListener('data', listener);
+            if (chunk.toString() !== '\r' && chunk.toString() !== '\n') {
+                process.exit();
+            } else {
+                resolve();
+            }
+        });
+    });
 
     // create success and error streams
     let headersSuccess = Object.keys(dropList[0]);
