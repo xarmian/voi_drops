@@ -63,7 +63,11 @@ const getFilenameArguments = () => {
 	// add blacklist to url
 	if (blacklist.length > 0) url += `&blacklist=${blacklist.join(',')}`;
 
-    await fetch(url,{cache: "no-store"})
+	// if process.env.APIKEY, send as header key/value pair X-Api-Key in fetch()
+	let headers = {};
+	if (typeof process.env.MNEMONIC != 'undefined') headers = { 'X-Api-Key': process.env.APIKEY };
+
+    await fetch(url,{headers: headers, cache: "no-store"})
         .then(response => response.json())
         .then(data => {
             const dataArrays = data.data;

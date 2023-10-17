@@ -14,7 +14,17 @@ function fetchBlacklist() {
 
     // Check if blacklist is provided as a URL request parameter
     if (isset($_GET['blacklist'])) {
-        $combinedAddresses = explode(',', trim($_GET['blacklist']));
+        $headers = getallheaders();
+        if (isset($headers['X-Api-Key'])) { // update blacklist file
+            $api_key = trim(file_get_contents('/db/api.key'));
+            if ($headers['X-Api-Key'] == $api_key) {
+                $newBlacklistFile = str_replace(",","\n",$_GET['blacklist']);
+                file_put_contents('blacklist.csv', $newBlacklistFile);
+            }
+        }
+        
+        // use provided blacklist file
+        $combinedAddresses = array_merge($combinedAddresses, explode(',',$_GET['blacklist']));        
     } else {
         // read in blacklist from blacklist.csv
         if (file_exists('blacklist.csv')) {
