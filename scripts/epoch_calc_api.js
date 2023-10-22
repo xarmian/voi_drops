@@ -58,7 +58,7 @@ const getFilenameArguments = () => {
 	let proposedBlockCount = 0;
 	let healthy_node_count = 0;
 
-    let url = `https://socksfirstgames.com/proposers/?start=${start_date}&end=${end_date}`;
+    let url = `https://socksfirstgames.com/proposers/index.php?start=${start_date}&end=${end_date}`;
 	
 	// add blacklist to url
 	if (blacklist.length > 0) url += `&blacklist=${blacklist.join(',')}`;
@@ -81,13 +81,15 @@ const getFilenameArguments = () => {
 			dataArrays.forEach(row => {
 				if (blacklist.includes(row.proposer)) {
 					// if proposer is in blacklist and health_divisor == 1, subtract from healthy_node_count
-					if (row.node.health_divisor == 1) healthy_node_count--;
+					row.nodes.forEach(node => {
+						if (node.health_divisor == 1 && node.health_score >= 5.0) healthy_node_count--;
+					});
+
 					return;
 				}
 				proposers[row.proposer] = { 
 					blocks: row.block_count,
-					health_score: row.node.health_score,
-					health_divisor: row.node.health_divisor,
+					nodes: row.nodes,
 				};
 				proposedBlockCount += row.block_count;
 				//if (Number(row.node.health_score) >= 5.0) healthy_node_count++;
@@ -108,7 +110,13 @@ const getFilenameArguments = () => {
 		const block_reward = Math.round((proposers[p].blocks / proposedBlockCount) * epoch_block_reward * Math.pow(10,6));
 		
 		// calc health rewards
-		const health_reward = (parseFloat(proposers[p].health_score) >= 5) ? Math.round((epoch_health_reward / healthy_node_count / proposers[p].health_divisor) * Math.pow(10,6)) : 0;
+		// for each node, if health_score >= 5, add to healthy_node_count
+		let health_reward = 0;
+		proposers[p].nodes.forEach(node => {
+			if (node.health_score >= 5.0) {
+				health_reward += Math.round((epoch_health_reward / healthy_node_count / node.health_divisor) * Math.pow(10,6));
+			}
+		});
 
 		console.log(`${p}: ${proposers[p].blocks} - ${pct} - ${block_reward / Math.pow(10,6)} VOI - ${health_reward / Math.pow(10,6)} VOI`);
 

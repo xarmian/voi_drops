@@ -113,15 +113,17 @@ function fetchWeeklyHealth($blacklist, $date) {
         if (count($node['addresses']) == 0 && $node['score'] >= 5.0) {
             $emptyNodeCount++;
         }
+
+        $node['divisor'] = count($node['addresses']);
+        if (!isset($node['addresses'])) $node['addresses'] = array();
         foreach($node['addresses'] as $address) {
-            if (isset($addresses[$address])) {
-                $addresses[$address]['divisor'] = min(count($node['addresses']),$addresses[$address]['divisor']);
-            }
-            else {
-                $addresses[$address] = $node;
-                $addresses[$address]['divisor'] = count($node['addresses']);
-                unset($addresses[$address]['addresses']);
-            }
+            $addresses[$address][] = array(
+                'node_host'=>$node['host'],
+                'node_name'=>$node['name'],
+                'health_score'=>$node['score'],
+                'health_divisor'=>$node['divisor'],
+                'health_hours'=>$node['hours'],
+            );
         }
     }
 
@@ -184,13 +186,7 @@ while ($row = $results->fetchArray(SQLITE3_ASSOC)) {
     $data[] = array(
         'proposer' => $row['proposer'],
         'block_count' => $row['block_count'],
-        'node' => array(
-            'node_host' => isset($health['addresses'][$row['proposer']]) ? $health['addresses'][$row['proposer']]['host'] : null,
-            'node_name' => isset($health['addresses'][$row['proposer']]) ? $health['addresses'][$row['proposer']]['name'] : null,
-            'health_score' => isset($health['addresses'][$row['proposer']]) ? $health['addresses'][$row['proposer']]['score'] : null,
-            'health_divisor' => isset($health['addresses'][$row['proposer']]) ? $health['addresses'][$row['proposer']]['divisor'] : null,
-            'health_hours' => isset($health['addresses'][$row['proposer']]) ? $health['addresses'][$row['proposer']]['hours'] : null,
-        ),
+        'nodes' => (isset($health['addresses'][$row['proposer']])) ? $health['addresses'][$row['proposer']] : array(),
     );
 
     // remove so we can merge in remaining nodes
@@ -200,17 +196,11 @@ while ($row = $results->fetchArray(SQLITE3_ASSOC)) {
 }
 
 // Add remaining nodes to the data array
-foreach($health['addresses'] as $address=>$node) {
+foreach($health['addresses'] as $address=>$nodes) {
     $data[] = array(
         'proposer' => $address,
         'block_count' => 0,
-        'node' => array(
-            'node_host' => $node['host'],
-            'node_name' => $node['name'],
-            'health_score' => $node['score'],
-            'health_divisor' => $node['divisor'],
-            'health_hours' => $node['hours'],
-        ),
+        'nodes' => $nodes,
     );
 }
 
