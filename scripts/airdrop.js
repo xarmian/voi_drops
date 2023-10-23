@@ -63,6 +63,7 @@ const transferTokens = async (sender,array, successStream, errorStream, groupSiz
 
     let txGroup = [];
     let objInGroup = [];
+    if (groupSize < 1) groupSize = 1;
 
     for (let i = 0; i < array.length; i++) {
         try {
@@ -87,9 +88,6 @@ const transferTokens = async (sender,array, successStream, errorStream, groupSiz
 
                 txGroup.push(txn);
                 objInGroup.push(obj);
-
-                // if group isn't full and its not the last transaction, continue filling group
-                if (groupSize < 1) groupSize = 1;
             }
             if (txGroup.length < groupSize && i < (array.length-1)) continue;
             
@@ -213,7 +211,8 @@ const waitForConfirmation = async (algod, txId, timeout) => {
         totalTokens += Number(obj.tokenAmount);
     }
 
-    const estimateTxFees = dropList.length * FLAT_FEE;
+    const count = dropList.filter(item => item.tokenAmount > 0).length;
+    const estimateTxFees = count * FLAT_FEE;
 
     // adding one to totalTokens to account for transaction fee
     if (senderAccountInfo.amount < (totalTokens+estimateTxFees)) {
@@ -224,6 +223,7 @@ const waitForConfirmation = async (algod, txId, timeout) => {
     console.log(`Total tokens to be sent: ${atomicToDisplay(totalTokens)}`);
     console.log(`Estimated tx fees: ${atomicToDisplay(estimateTxFees)}`);
     console.log(`Total wallets: ${dropList.length}`);
+    console.log(`Number of wallets with token amount greater than zero: ${count}`);
     console.log('');
     
     // pause for enter key press to continue
