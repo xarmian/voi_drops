@@ -69,28 +69,28 @@ const transferTokens = async (sender,array, successStream, errorStream, groupSiz
             let obj = array[i];
 
             // skip zero token amounts
-            if (obj.tokenAmount <= 0) continue;
-            
-            if (obj.note !== undefined && note !== undefined) {
-                try {
-                    obj.note = JSON.parse(obj.note);
-                    obj.note['note'] = note;
-                    obj.note = JSON.stringify(obj.note);
-                } catch (e) {
-                    // obj.note is not json, ignore
+            if (obj.tokenAmount > 0) {
+                if (obj.note !== undefined && note !== undefined) {
+                    try {
+                        obj.note = JSON.parse(obj.note);
+                        obj.note['note'] = note;
+                        obj.note = JSON.stringify(obj.note);
+                    } catch (e) {
+                        // obj.note is not json, ignore
+                    }
                 }
+
+                const txn = algosdk.makePaymentTxnWithSuggestedParams(sender.addr, obj.account, parseInt(obj.tokenAmount), undefined, enc.encode(obj.note || note),params);
+                // Using the receiver transaction as a lease
+                // This prevents the airdrop script from sending a rewards payment twice in a 1000 round range
+                txn.lease = algosdk.decodeAddress(obj.account).publicKey;
+
+                txGroup.push(txn);
+                objInGroup.push(obj);
+
+                // if group isn't full and its not the last transaction, continue filling group
+                if (groupSize < 1) groupSize = 1;
             }
-
-            const txn = algosdk.makePaymentTxnWithSuggestedParams(sender.addr, obj.account, parseInt(obj.tokenAmount), undefined, enc.encode(obj.note || note),params);
-            // Using the receiver transaction as a lease
-            // This prevents the airdrop script from sending a rewards payment twice in a 1000 round range
-            txn.lease = algosdk.decodeAddress(obj.account).publicKey;
-
-            txGroup.push(txn);
-            objInGroup.push(obj);
-
-            // if group isn't full and its not the last transaction, continue filling group
-            if (groupSize < 1) groupSize = 1;
             if (txGroup.length < groupSize && i < (array.length-1)) continue;
             
             // assign group ID
@@ -217,7 +217,7 @@ const waitForConfirmation = async (algod, txId, timeout) => {
 
     // adding one to totalTokens to account for transaction fee
     if (senderAccountInfo.amount < (totalTokens+estimateTxFees)) {
-        exitMenu(`Sender account balance (${senderAccountInfo.amount}) is less than total tokens to be sent (${totalTokens})`);
+       // exitMenu(`Sender account balance (${senderAccountInfo.amount}) is less than total tokens to be sent (${totalTokens})`);
     };
 
     // display total tokens to be sent
