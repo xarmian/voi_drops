@@ -107,14 +107,14 @@ const getFilenameArguments = () => {
 	for(let p in proposers) {
 		// calc block rewards
 		const pct = proposers[p].blocks / proposedBlockCount;
-		const block_reward = Math.round(Math.floor((proposers[p].blocks / proposedBlockCount) * epoch_block_reward * Math.pow(10,7))/10);
+		const block_reward = Math.floor(Math.ceil((proposers[p].blocks / proposedBlockCount) * epoch_block_reward * Math.pow(10,7))/10);
 		
 		// calc health rewards
 		// for each node, if health_score >= 5, add to healthy_node_count
 		let health_reward = 0;
 		proposers[p].nodes.forEach(node => {
 			if (node.health_score >= 5.0) {
-				health_reward += Math.round(Math.floor((epoch_health_reward / healthy_node_count / node.health_divisor) * Math.pow(10,7))/10);
+				health_reward += Math.floor(Math.ceil((epoch_health_reward / healthy_node_count / node.health_divisor) * Math.pow(10,7))/10);
 			}
 		});
 
