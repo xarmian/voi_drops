@@ -24,9 +24,9 @@ const getFilenameArguments = () => {
 
     // open CSV file and iterate over each line, ignoring header line
     const file = await csvToJson(filename);
-    let total_rewards = 0;
-    let total_block_rewards = 0;
-    let total_health_rewards = 0;
+    let total_rewards = 0.0;
+    let total_block_rewards = 0.0;
+    let total_health_rewards = 0.0;
     
     // iterate over each line of the CSV file
     file.forEach((line, index) => {
@@ -38,9 +38,13 @@ const getFilenameArguments = () => {
     });
 
     // compare total rewards to expected rewards
-    console.log(`Total block rewards: ${total_block_rewards}`);
-    console.log(`Total health rewards: ${total_health_rewards}`);
+    console.log(`Total block rewards: ${total_block_rewards.toFixed(6)}`);
+    console.log(`Total health rewards: ${total_health_rewards.toFixed(6)}`);
     console.log(`Total rewards: ${total_rewards/Math.pow(10,6)}`);
+
+    if ((total_block_rewards + total_health_rewards).toFixed(6) != (total_rewards/Math.pow(10,6)).toFixed(6)) {
+        console.log(`ERROR: Total rewards does not match the sum of Block and Health rewards!`);
+    }
 
 })();
 
