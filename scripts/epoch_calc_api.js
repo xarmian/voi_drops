@@ -11,6 +11,12 @@
 
 	Usage: node epoch_calc.js -s START -e END -r EPOCHREWARD -f FILENAME [-b <blacklist.csv>]
 
+	Unit Test Ideas
+	- Iterate over the CSV file, sum of column two should equal EPOCHREWARD + HEALTHREWARD
+	- Iterate over the CSV file, json_decode column three, sum of blockRewards should equal EPOCHREWARD
+	- Iterate over the CSV file, json_decode column three, sum of healthRewards should equal HEALTHREWARD
+	- Iterate over the CSV file, json_decode column three, sum of blockRewards + healthRewards should equal EPOCHREWARD + HEALTHREWARD
+	- Iterate over the CSV file, json_decode column three, sum of blockRewards + healthRewards should equal sum of column two
 */
 
 import fs from 'fs';
@@ -71,7 +77,7 @@ const getFilenameArguments = () => {
         .then(response => response.json())
         .then(data => {
             const dataArrays = data.data;
-			healthy_node_count = data.healthy_node_count - data.empty_node_count;
+			healthy_node_count = data.healthy_node_count - data.empty_node_count - data.extra_node_count;
 
             // Sort the data by block count
             dataArrays.sort((a, b) => b.block_count - a.block_count);
@@ -105,18 +111,30 @@ const getFilenameArguments = () => {
 	// print out proposers list with tokens owed based on percentage proposed
 	let rewards = [];
 	for(let p in proposers) {
+		const item = proposers[p];
+				
 		// calc block rewards
 		const pct = proposers[p].blocks / proposedBlockCount;
 		const block_reward = Math.floor(Math.ceil((proposers[p].blocks / proposedBlockCount) * epoch_block_reward * Math.pow(10,7))/10);
 		
+		// sort elements in item.nodes from lowest health_divisor to highest
+		item.nodes.sort((a, b) => a.health_divisor - b.health_divisor);
+
+		// try to get the first index of an element in item.nodes with a health_score >= 5.0
+		let health_reward = 0;
+		const healthyNodeIndex = item.nodes.findIndex(node => node.health_score >= 5.0);
+		if (healthyNodeIndex !== -1) {
+			health_reward = Math.floor(Math.ceil(epoch_health_reward / healthy_node_count / item.nodes[healthyNodeIndex].health_divisor * Math.pow(10,7)) / 10);
+		}
+
 		// calc health rewards
 		// for each node, if health_score >= 5, add to healthy_node_count
-		let health_reward = 0;
+		/*let health_reward = 0;
 		proposers[p].nodes.forEach(node => {
 			if (node.health_score >= 5.0) {
 				health_reward += Math.floor(Math.ceil((epoch_health_reward / healthy_node_count / node.health_divisor) * Math.pow(10,7))/10);
 			}
-		});
+		});*/
 
 		console.log(`${p}: ${proposers[p].blocks} - ${pct} - ${block_reward / Math.pow(10,6)} VOI - ${health_reward / Math.pow(10,6)} VOI`);
 
@@ -131,6 +149,15 @@ const getFilenameArguments = () => {
 		});
 	}
 	console.log(`Total blocks produced by non-blacklisted addresses: ${proposedBlockCount}`);
+	console.log(`Total healthy nodes: ${healthy_node_count}`);
+
+	// ouput Block Rewards Expected vs. Actual, formatted
+	console.log('');
+	console.log(`Block Rewards  -- Expected: ${epoch_block_reward.toFixed(6).padStart(18)} VOI     Actual: ${rewards.reduce((a,b) => a + JSON.parse(b.note).blockRewards,0).toFixed(6).padStart(18)} VOI`);
+	console.log(`Health Rewards -- Expected: ${epoch_health_reward.toFixed(6).padStart(18)} VOI     Actual: ${rewards.reduce((a,b) => a + JSON.parse(b.note).healthRewards,0).toFixed(6).padStart(18)} VOI`);
+	console.log(`Total Rewards  -- Expected: ${(epoch_block_reward + epoch_health_reward).toFixed(6).padStart(18)} VOI     Actual: ${(rewards.reduce((a,b) => a + b.tokenAmount,0) / Math.pow(10,6)).toFixed(6).padStart(18)} VOI`);
+	console.log('');
+
 
 	// write out to CSV file
 	writeToCSV(rewards,output_filename);

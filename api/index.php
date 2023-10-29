@@ -157,6 +157,62 @@ if ($startTimestamp == null || $endTimestamp == null) {
     ));
     exit();
 }
+else if (isset($_GET['address'])) {
+    $blacklist = fetchBlacklist();
+
+    // Prepare the SQL query to select the addresses and block counts, grouped by calendar week from Monday to Sunday
+    $sql = "WITH WeekStarts AS (
+                SELECT DISTINCT
+                       date(timestamp, 'weekday 0', '-6 days') as week_start,
+                       date(timestamp, 'weekday 0') as week_end
+                FROM blocks
+                WHERE proposer = :proposer
+            )
+            
+            SELECT 
+                ws.week_start as start_date,
+                ws.week_end as end_date,
+                COALESCE(SUM(CASE WHEN b.proposer = :proposer THEN 1 ELSE 0 END), 0) as total_blocks,
+                COALESCE(COUNT(CASE WHEN b.proposer NOT IN ('" . implode("', '", $blacklist) . "') THEN b.block ELSE NULL END), 0) as count_of_rows
+            FROM WeekStarts ws
+            LEFT JOIN blocks b ON 
+                b.timestamp BETWEEN ws.week_start AND ws.week_end
+            GROUP BY 
+                ws.week_start, 
+                ws.week_end
+            ORDER BY 
+                ws.week_start";
+                
+    // Prepare the SQL statement and bind the parameters
+    $stmt = $db->prepare($sql);
+    $stmt->bindValue(':proposer', $_GET['address'], SQLITE3_TEXT);
+    //$stmt->bindValue(':start', $startTimestamp, SQLITE3_TEXT);
+    //$stmt->bindValue(':end', $endTimestamp, SQLITE3_TEXT);
+
+    // Execute the SQL statement and get the results
+    $results = $stmt->execute();
+
+    // Create an array to hold the address and block count data
+    $data = array();
+    
+    // Loop through the results and add the data to the array
+    while ($row = $results->fetchArray(SQLITE3_ASSOC)) {
+        var_dump($row);
+        continue;
+        $data[] = array(
+            'week' => $row['week'],
+            'block_count' => $row['block_count'],
+            'total_blocks' => $row['total_blocks'],
+        );
+    }
+
+    // Close the database connection
+    $db->close();
+
+    // Convert the output to a JSON object and output it
+    echo json_encode($data);
+    exit();
+}
 
 // Prepare the SQL query to select the addresses and block counts
 $sql = "SELECT proposer, COUNT(*) AS block_count FROM blocks WHERE timestamp >= :start AND timestamp <= :end GROUP BY proposer";
@@ -204,6 +260,14 @@ foreach($health['addresses'] as $address=>$nodes) {
     );
 }
 
+// find $data['nodes'] with more than one node with a health_score >= 5.0
+$extraNodeCount = 0.0;
+foreach($data as $d) {
+    for($i=1;$i<count($d['nodes']);$i++) {
+        if ($d['nodes'][$i]['health_score'] >= 5.0) $extraNodeCount += 1.0/$d['nodes'][$i]['health_divisor'];
+    }
+}
+
 // Get the most recent timestamp from the blocks table
 $maxTimestampResult = $db->querySingle('SELECT MAX(timestamp) FROM blocks');
 $maxTimestamp = $maxTimestampResult ? $maxTimestampResult : null;
@@ -223,6 +287,7 @@ $output = array(
     'healthy_node_count' => $health['healthy_node_count'],
     'empty_node_count' => $health['empty_node_count'],
     'qualify_node_count' => $health['qualify_node_count'],
+    'extra_node_count' => $extraNodeCount,
 );
 
 // Convert the output to a JSON object and output it
