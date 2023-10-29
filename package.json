@@ -4,20 +4,20 @@
   "description": "Reward airdrop script for block proposers",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "start": "npm run menu",
     "airdrop": "node scripts/airdrop.js",
     "epoch_calc_api": "node scripts/epoch_calc_api.js",
     "epoch_calc": "node scripts/epoch_calc.js",
     "block_follower": "node scripts/block_follower.js",
     "buckets": "node scripts/buckets.js",
+    "test": "node tests/epoch_calc_api_test.js",
     "menu": "echo \"Usage: npm run [script]\n\nAvailable scripts:\nairdrop\nepoch_calc_api\nepoch_calc\nblock_follower\nbuckets\""
   },
   "type": "module",
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "algosdk": "^2.4.0",
+    "algosdk": "^2.7.0",
     "config": "^3.3.9",
     "csv-writer": "^1.6.0",
     "dotenv": "^16.3.1",
