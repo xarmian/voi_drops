@@ -93,7 +93,8 @@ function fetchWeeklyHealth($blacklist, $date) {
             'name' => $d[$positions['name']],
             'score' => $d[$positions['score']],
             'addresses' => $d[$positions['addresses']],
-            'hours' => $d[$positions['hours']]
+            'hours' => $d[$positions['hours']],
+	        'ver' => $d[$positions['ver']],
         );
 
         if ($d[$positions['score']] >= 5.0) {
@@ -123,6 +124,7 @@ function fetchWeeklyHealth($blacklist, $date) {
                 'health_score'=>$node['score'],
                 'health_divisor'=>$node['divisor'],
                 'health_hours'=>$node['hours'],
+        		'ver'=>$node['ver'],
             );
         }
     }
@@ -145,7 +147,79 @@ $db = new SQLite3('/db/proposers.db');
 $db->busyTimeout(5000);
 
 // If the start or end timestamps are not set, return the high and low timestamps from the database
-if ($startTimestamp == null || $endTimestamp == null) {
+if (isset($_GET['wallet'])) {
+    $blacklist = fetchBlacklist();
+    $health = fetchWeeklyHealth($blacklist,date('Ymd', strtotime('+1 day', strtotime('now'))));
+
+    $output = array(
+        'data' => $health['addresses'][$_GET['wallet']],
+        'total_node_count' => $health['total_node_count'],
+        'healthy_node_count' => $health['healthy_node_count'],
+        'empty_node_count' => $health['empty_node_count'],
+        'qualify_node_count' => $health['qualify_node_count'],
+    );
+
+    // get most recent Monday (morning) at midight UTC
+    $monday = date('Y-m-d', strtotime('last Monday', time())).'T00:00:00Z';
+    // get next Sunday (night) at midnight UTC
+    $sunday = date('Y-m-d', strtotime('next Sunday', time())).'T23:59:59Z';
+
+    // select the total blocks produced by :proposer from $monday to $sunday
+    $sql = "
+            SELECT 
+                COALESCE(SUM(CASE WHEN b.proposer = :proposer THEN 1 ELSE 0 END), 0) as total_blocks
+            FROM blocks b
+            WHERE b.timestamp BETWEEN :monday AND :sunday";
+
+    $stmt = $db->prepare($sql);
+    $stmt->bindValue(':proposer', $_GET['wallet'], SQLITE3_TEXT);
+    $stmt->bindValue(':monday', $monday, SQLITE3_TEXT);
+    $stmt->bindValue(':sunday', $sunday, SQLITE3_TEXT);
+
+    $results = $stmt->execute();
+
+    while ($row = $results->fetchArray(SQLITE3_ASSOC)) {
+        $output['total_blocks'] = $row['total_blocks'];
+    }
+
+    // get first block on or after $monday and add it to the $output array
+    $sql = "SELECT 
+                b.block
+            FROM blocks b
+            WHERE b.timestamp >= :monday
+            ORDER BY b.timestamp ASC
+            LIMIT 1";
+
+    $stmt = $db->prepare($sql);
+    $stmt->bindValue(':monday', $monday, SQLITE3_TEXT);
+    $results = $stmt->execute();
+
+    while ($row = $results->fetchArray(SQLITE3_ASSOC)) {
+        $output['first_block'] = $row['block'];
+    }
+    
+    // get last block before $sunday and add it to the $output array
+    $sql = "SELECT 
+                b.block
+            FROM blocks b
+            WHERE b.timestamp <= :sunday
+            ORDER BY b.timestamp DESC
+            LIMIT 1";
+
+    $stmt = $db->prepare($sql);
+    $stmt->bindValue(':sunday', $sunday, SQLITE3_TEXT);
+    $results = $stmt->execute();
+
+    while ($row = $results->fetchArray(SQLITE3_ASSOC)) {
+        $output['last_block'] = $row['block'];
+    }
+
+    $db->close();
+
+    echo json_encode($output);
+    exit();
+}
+else if ($startTimestamp == null || $endTimestamp == null) {
     // Get the minimum and maximum timestamps from the blocks table
     $minTimestampResult = $db->querySingle('SELECT MIN(timestamp) FROM blocks');
     $maxTimestampResult = $db->querySingle('SELECT MAX(timestamp) FROM blocks');
@@ -155,62 +229,6 @@ if ($startTimestamp == null || $endTimestamp == null) {
         'min_timestamp' => $minTimestamp,
         'max_timestamp' => $maxTimestamp
     ));
-    exit();
-}
-else if (isset($_GET['address'])) {
-    $blacklist = fetchBlacklist();
-
-    // Prepare the SQL query to select the addresses and block counts, grouped by calendar week from Monday to Sunday
-    $sql = "WITH WeekStarts AS (
-                SELECT DISTINCT
-                       date(timestamp, 'weekday 0', '-6 days') as week_start,
-                       date(timestamp, 'weekday 0') as week_end
-                FROM blocks
-                WHERE proposer = :proposer
-            )
-            
-            SELECT 
-                ws.week_start as start_date,
-                ws.week_end as end_date,
-                COALESCE(SUM(CASE WHEN b.proposer = :proposer THEN 1 ELSE 0 END), 0) as total_blocks,
-                COALESCE(COUNT(CASE WHEN b.proposer NOT IN ('" . implode("', '", $blacklist) . "') THEN b.block ELSE NULL END), 0) as count_of_rows
-            FROM WeekStarts ws
-            LEFT JOIN blocks b ON 
-                b.timestamp BETWEEN ws.week_start AND ws.week_end
-            GROUP BY 
-                ws.week_start, 
-                ws.week_end
-            ORDER BY 
-                ws.week_start";
-                
-    // Prepare the SQL statement and bind the parameters
-    $stmt = $db->prepare($sql);
-    $stmt->bindValue(':proposer', $_GET['address'], SQLITE3_TEXT);
-    //$stmt->bindValue(':start', $startTimestamp, SQLITE3_TEXT);
-    //$stmt->bindValue(':end', $endTimestamp, SQLITE3_TEXT);
-
-    // Execute the SQL statement and get the results
-    $results = $stmt->execute();
-
-    // Create an array to hold the address and block count data
-    $data = array();
-    
-    // Loop through the results and add the data to the array
-    while ($row = $results->fetchArray(SQLITE3_ASSOC)) {
-        var_dump($row);
-        continue;
-        $data[] = array(
-            'week' => $row['week'],
-            'block_count' => $row['block_count'],
-            'total_blocks' => $row['total_blocks'],
-        );
-    }
-
-    // Close the database connection
-    $db->close();
-
-    // Convert the output to a JSON object and output it
-    echo json_encode($data);
     exit();
 }
 
