@@ -139,175 +139,232 @@ function fetchWeeklyHealth($blacklist, $date) {
 }
 
 // Get the start and end timestamps from the GET request
-$startTimestamp = (isset($_GET['start'])) ? $_GET['start'].'T00:00:00Z' : null;
-$endTimestamp = (isset($_GET['end'])) ? $_GET['end'].'T23:59:59Z' : null;
+$startTimestamp = (isset($_REQUEST['start'])) ? $_REQUEST['start'].'T00:00:00Z' : null;
+$endTimestamp = (isset($_REQUEST['end'])) ? $_REQUEST['end'].'T23:59:59Z' : null;
 
 // Open the SQLite3 database
 $db = new SQLite3('/db/proposers.db');
 $db->busyTimeout(5000);
 
-// If the start or end timestamps are not set, return the high and low timestamps from the database
-if (isset($_GET['wallet'])) {
-    $blacklist = fetchBlacklist();
-    $health = fetchWeeklyHealth($blacklist,date('Ymd', strtotime('+1 day', strtotime('now'))));
+$action = (isset($_GET['action'])) ? $_REQUEST['action'] : 'statistics';
+$jarray = array("success"=>false,"error"=>"Unspecified Error or Unknown Action: ".$action);
 
-    $output = array(
-        'data' => $health['addresses'][$_GET['wallet']],
-        'total_node_count' => $health['total_node_count'],
-        'healthy_node_count' => $health['healthy_node_count'],
-        'empty_node_count' => $health['empty_node_count'],
-        'qualify_node_count' => $health['qualify_node_count'],
-    );
+switch($action) {
+    case 'blacklist':
+        $blacklist = fetchBlacklist();
+        $jarray = json_encode($blacklist);
+        break;
+    case 'health':
+        $blacklist = fetchBlacklist();
+        $health = fetchWeeklyHealth($blacklist,date('Ymd', strtotime('+1 day', strtotime('now'))));
+        $jarray = json_encode($health);
+        break;
+    case 'proposals':
+        // query sqllite for all proposals for wallet between $startTimestamp and $endTimestamp, or in last 30 days if null
+        if (!isset($_REQUEST['wallet'])) break;
 
-    // get most recent Monday (morning) at midight UTC
-    $monday = date('Y-m-d', strtotime('last Monday', time())).'T00:00:00Z';
-    // get next Sunday (night) at midnight UTC
-    $sunday = date('Y-m-d', strtotime('next Sunday', time())).'T23:59:59Z';
+        if ($startTimestamp == null) {
+            $startTimestamp = date('Y-m-d', strtotime('-30 days', strtotime('now'))).'T00:00:00Z';
+        }
+        if ($endTimestamp == null) {
+            $endTimestamp = date('Y-m-d', strtotime('now')).'T23:59:59Z';
+        }
 
-    // select the total blocks produced by :proposer from $monday to $sunday
-    $sql = "
-            SELECT 
-                COALESCE(SUM(CASE WHEN b.proposer = :proposer THEN 1 ELSE 0 END), 0) as total_blocks
-            FROM blocks b
-            WHERE b.timestamp BETWEEN :monday AND :sunday";
+        $sql = "SELECT block,timestamp FROM blocks WHERE proposer = :proposer AND timestamp >= :start AND timestamp <= :end ORDER BY timestamp DESC";
+        $stmt = $db->prepare($sql);
+        $stmt->bindValue(':proposer', $_REQUEST['wallet'], SQLITE3_TEXT);
+        $stmt->bindValue(':start', $startTimestamp, SQLITE3_TEXT);
+        $stmt->bindValue(':end', $endTimestamp, SQLITE3_TEXT);
+        $results = $stmt->execute();
 
-    $stmt = $db->prepare($sql);
-    $stmt->bindValue(':proposer', $_GET['wallet'], SQLITE3_TEXT);
-    $stmt->bindValue(':monday', $monday, SQLITE3_TEXT);
-    $stmt->bindValue(':sunday', $sunday, SQLITE3_TEXT);
+        $proposals = array();
 
-    $results = $stmt->execute();
+        // group proposals by day
+        while ($row = $results->fetchArray(SQLITE3_ASSOC)) {
+            $day = substr($row['timestamp'],0,10);
+            if (!isset($proposals[$day])) $proposals[$day] = array();
+            $proposals[$day][] = $row['block'];
+        }
 
-    while ($row = $results->fetchArray(SQLITE3_ASSOC)) {
-        $output['total_blocks'] = $row['total_blocks'];
-    }
+        // add any missing days with empty array
+        $start = new DateTime($startTimestamp);
+        $end = new DateTime($endTimestamp);
+        $interval = new DateInterval('P1D');
+        $daterange = new DatePeriod($start, $interval ,$end);
+        foreach($daterange as $date){
+            $day = $date->format("Y-m-d");
+            if (!isset($proposals[$day])) $proposals[$day] = array();
+        }
 
-    // get first block on or after $monday and add it to the $output array
-    $sql = "SELECT 
-                b.block
-            FROM blocks b
-            WHERE b.timestamp >= :monday
-            ORDER BY b.timestamp ASC
-            LIMIT 1";
+        $jarray = json_encode($proposals);
+        break;
+    case 'walletDetails':
+        if (!isset($_REQUEST['wallet'])) break;
 
-    $stmt = $db->prepare($sql);
-    $stmt->bindValue(':monday', $monday, SQLITE3_TEXT);
-    $results = $stmt->execute();
-
-    while ($row = $results->fetchArray(SQLITE3_ASSOC)) {
-        $output['first_block'] = $row['block'];
-    }
+        $blacklist = fetchBlacklist();
+        $health = fetchWeeklyHealth($blacklist,date('Ymd', strtotime('+1 day', strtotime('now'))));
     
-    // get last block before $sunday and add it to the $output array
-    $sql = "SELECT 
-                b.block
-            FROM blocks b
-            WHERE b.timestamp <= :sunday
-            ORDER BY b.timestamp DESC
-            LIMIT 1";
+        $output = array(
+            'data' => $health['addresses'][$_GET['wallet']],
+            'total_node_count' => $health['total_node_count'],
+            'healthy_node_count' => $health['healthy_node_count'],
+            'empty_node_count' => $health['empty_node_count'],
+            'qualify_node_count' => $health['qualify_node_count'],
+        );
+    
+        // get most recent Monday (morning) at midight UTC
+        $monday = date('Y-m-d', strtotime('last Monday', time())).'T00:00:00Z';
+        // get next Sunday (night) at midnight UTC
+        $sunday = date('Y-m-d', strtotime('next Sunday', time())).'T23:59:59Z';
+    
+        // select the total blocks produced by :proposer from $monday to $sunday
+        $sql = "
+                SELECT 
+                    COALESCE(SUM(CASE WHEN b.proposer = :proposer THEN 1 ELSE 0 END), 0) as total_blocks
+                FROM blocks b
+                WHERE b.timestamp BETWEEN :monday AND :sunday";
+    
+        $stmt = $db->prepare($sql);
+        $stmt->bindValue(':proposer', $_GET['wallet'], SQLITE3_TEXT);
+        $stmt->bindValue(':monday', $monday, SQLITE3_TEXT);
+        $stmt->bindValue(':sunday', $sunday, SQLITE3_TEXT);
+    
+        $results = $stmt->execute();
+    
+        while ($row = $results->fetchArray(SQLITE3_ASSOC)) {
+            $output['total_blocks'] = $row['total_blocks'];
+        }
+    
+        // get first block on or after $monday and add it to the $output array
+        $sql = "SELECT 
+                    b.block
+                FROM blocks b
+                WHERE b.timestamp >= :monday
+                ORDER BY b.timestamp ASC
+                LIMIT 1";
+    
+        $stmt = $db->prepare($sql);
+        $stmt->bindValue(':monday', $monday, SQLITE3_TEXT);
+        $results = $stmt->execute();
+    
+        while ($row = $results->fetchArray(SQLITE3_ASSOC)) {
+            $output['first_block'] = $row['block'];
+        }
+        
+        // get last block before $sunday and add it to the $output array
+        $sql = "SELECT 
+                    b.block
+                FROM blocks b
+                WHERE b.timestamp <= :sunday
+                ORDER BY b.timestamp DESC
+                LIMIT 1";
+    
+        $stmt = $db->prepare($sql);
+        $stmt->bindValue(':sunday', $sunday, SQLITE3_TEXT);
+        $results = $stmt->execute();
+    
+        while ($row = $results->fetchArray(SQLITE3_ASSOC)) {
+            $output['last_block'] = $row['block'];
+        }
+    
+        $db->close();
+    
+        $jarray = json_encode($output);
+    
+        break;
+    case 'statistics':
+        if ($startTimestamp == null || $endTimestamp == null) {
+            // Get the minimum and maximum timestamps from the blocks table
+            $minTimestampResult = $db->querySingle('SELECT MIN(timestamp) FROM blocks');
+            $maxTimestampResult = $db->querySingle('SELECT MAX(timestamp) FROM blocks');
+            $minTimestamp = $minTimestampResult ? $minTimestampResult : null;
+            $maxTimestamp = $maxTimestampResult ? $maxTimestampResult : null;
+            $jarray = json_encode(array(
+                'min_timestamp' => $minTimestamp,
+                'max_timestamp' => $maxTimestamp
+            ));
+            break;
+        }
 
-    $stmt = $db->prepare($sql);
-    $stmt->bindValue(':sunday', $sunday, SQLITE3_TEXT);
-    $results = $stmt->execute();
+        // Prepare the SQL query to select the addresses and block counts
+        $sql = "SELECT proposer, COUNT(*) AS block_count FROM blocks WHERE timestamp >= :start AND timestamp <= :end GROUP BY proposer";
 
-    while ($row = $results->fetchArray(SQLITE3_ASSOC)) {
-        $output['last_block'] = $row['block'];
-    }
+        // Prepare the SQL statement and bind the parameters
+        $stmt = $db->prepare($sql);
+        $stmt->bindValue(':start', $startTimestamp, SQLITE3_TEXT);
+        $stmt->bindValue(':end', $endTimestamp, SQLITE3_TEXT);
 
-    $db->close();
+        // Execute the SQL statement and get the results
+        $results = $stmt->execute();
 
-    echo json_encode($output);
-    exit();
+        // Create an array to hold the address and block count data
+        $data = array();
+
+        // Fetch the blacklist
+        $blacklist = fetchBlacklist();
+
+        // Fetch weekly health data
+        $health = fetchWeeklyHealth($blacklist,date('Ymd', strtotime('+1 day', strtotime($endTimestamp))));
+
+        // Loop through the results and add the data to the array
+        while ($row = $results->fetchArray(SQLITE3_ASSOC)) {
+            if (in_array($row['proposer'], $blacklist)) {
+                continue;
+            }
+            $data[] = array(
+                'proposer' => $row['proposer'],
+                'block_count' => $row['block_count'],
+                'nodes' => (isset($health['addresses'][$row['proposer']])) ? $health['addresses'][$row['proposer']] : array(),
+            );
+
+            // remove so we can merge in remaining nodes
+            if (isset($health['addresses'][$row['proposer']])) {
+                unset($health['addresses'][$row['proposer']]);
+            }
+        }
+
+        // Add remaining nodes to the data array
+        foreach($health['addresses'] as $address=>$nodes) {
+            $data[] = array(
+                'proposer' => $address,
+                'block_count' => 0,
+                'nodes' => $nodes,
+            );
+        }
+
+        // find $data['nodes'] with more than one node with a health_score >= 5.0
+        $extraNodeCount = 0.0;
+        foreach($data as $d) {
+            for($i=1;$i<count($d['nodes']);$i++) {
+                if ($d['nodes'][$i]['health_score'] >= 5.0) $extraNodeCount += 1.0/$d['nodes'][$i]['health_divisor'];
+            }
+        }
+
+        // Get the most recent timestamp from the blocks table
+        $maxTimestampResult = $db->querySingle('SELECT MAX(timestamp) FROM blocks');
+        $maxTimestamp = $maxTimestampResult ? $maxTimestampResult : null;
+
+        // Get highest block from blocks table
+        $blockHeightResult = $db->querySingle('SELECT MAX(block) FROM blocks');
+
+        // Close the database connection
+        $db->close();
+
+        // Add the most recent timestamp to the output array
+        $jarray = json_encode(array(
+            'data' => $data,
+            'max_timestamp' => $maxTimestamp,
+            'block_height' => $blockHeightResult,
+            'total_node_count' => $health['total_node_count'],
+            'healthy_node_count' => $health['healthy_node_count'],
+            'empty_node_count' => $health['empty_node_count'],
+            'qualify_node_count' => $health['qualify_node_count'],
+            'extra_node_count' => $extraNodeCount,
+        ));
+
+        break;
 }
-else if ($startTimestamp == null || $endTimestamp == null) {
-    // Get the minimum and maximum timestamps from the blocks table
-    $minTimestampResult = $db->querySingle('SELECT MIN(timestamp) FROM blocks');
-    $maxTimestampResult = $db->querySingle('SELECT MAX(timestamp) FROM blocks');
-    $minTimestamp = $minTimestampResult ? $minTimestampResult : null;
-    $maxTimestamp = $maxTimestampResult ? $maxTimestampResult : null;
-    echo json_encode(array(
-        'min_timestamp' => $minTimestamp,
-        'max_timestamp' => $maxTimestamp
-    ));
-    exit();
-}
-
-// Prepare the SQL query to select the addresses and block counts
-$sql = "SELECT proposer, COUNT(*) AS block_count FROM blocks WHERE timestamp >= :start AND timestamp <= :end GROUP BY proposer";
-
-// Prepare the SQL statement and bind the parameters
-$stmt = $db->prepare($sql);
-$stmt->bindValue(':start', $startTimestamp, SQLITE3_TEXT);
-$stmt->bindValue(':end', $endTimestamp, SQLITE3_TEXT);
-
-// Execute the SQL statement and get the results
-$results = $stmt->execute();
-
-// Create an array to hold the address and block count data
-$data = array();
-
-// Fetch the blacklist
-$blacklist = fetchBlacklist();
-
-// Fetch weekly health data
-$health = fetchWeeklyHealth($blacklist,date('Ymd', strtotime('+1 day', strtotime($endTimestamp))));
-
-// Loop through the results and add the data to the array
-while ($row = $results->fetchArray(SQLITE3_ASSOC)) {
-    if (in_array($row['proposer'], $blacklist)) {
-        continue;
-    }
-    $data[] = array(
-        'proposer' => $row['proposer'],
-        'block_count' => $row['block_count'],
-        'nodes' => (isset($health['addresses'][$row['proposer']])) ? $health['addresses'][$row['proposer']] : array(),
-    );
-
-    // remove so we can merge in remaining nodes
-    if (isset($health['addresses'][$row['proposer']])) {
-        unset($health['addresses'][$row['proposer']]);
-    }
-}
-
-// Add remaining nodes to the data array
-foreach($health['addresses'] as $address=>$nodes) {
-    $data[] = array(
-        'proposer' => $address,
-        'block_count' => 0,
-        'nodes' => $nodes,
-    );
-}
-
-// find $data['nodes'] with more than one node with a health_score >= 5.0
-$extraNodeCount = 0.0;
-foreach($data as $d) {
-    for($i=1;$i<count($d['nodes']);$i++) {
-        if ($d['nodes'][$i]['health_score'] >= 5.0) $extraNodeCount += 1.0/$d['nodes'][$i]['health_divisor'];
-    }
-}
-
-// Get the most recent timestamp from the blocks table
-$maxTimestampResult = $db->querySingle('SELECT MAX(timestamp) FROM blocks');
-$maxTimestamp = $maxTimestampResult ? $maxTimestampResult : null;
-
-// Get highest block from blocks table
-$blockHeightResult = $db->querySingle('SELECT MAX(block) FROM blocks');
-
-// Close the database connection
-$db->close();
-
-// Add the most recent timestamp to the output array
-$output = array(
-    'data' => $data,
-    'max_timestamp' => $maxTimestamp,
-    'block_height' => $blockHeightResult,
-    'total_node_count' => $health['total_node_count'],
-    'healthy_node_count' => $health['healthy_node_count'],
-    'empty_node_count' => $health['empty_node_count'],
-    'qualify_node_count' => $health['qualify_node_count'],
-    'extra_node_count' => $extraNodeCount,
-);
-
-// Convert the output to a JSON object and output it
-echo json_encode($output);
+    
+echo $jarray;
+exit();
 ?>
