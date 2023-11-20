@@ -164,10 +164,10 @@ switch($action) {
         if (!isset($_REQUEST['wallet'])) break;
 
         if ($startTimestamp == null) {
-            $startTimestamp = date('Y-m-d', strtotime('-30 days', strtotime('now'))).'T00:00:00Z';
+            $startTimestamp = gmdate('Y-m-d', strtotime('-30 days', strtotime('now'))).'T00:00:00Z';
         }
         if ($endTimestamp == null) {
-            $endTimestamp = date('Y-m-d', strtotime('now')).'T23:59:59Z';
+            $endTimestamp = gmdate('Y-m-d', strtotime('now')).'T23:59:59Z';
         }
 
         $sql = "SELECT block,timestamp FROM blocks WHERE proposer = :proposer AND timestamp >= :start AND timestamp <= :end ORDER BY timestamp DESC";
@@ -213,10 +213,13 @@ switch($action) {
         );
     
         // get most recent Monday (morning) at midight UTC
-        $monday = date('Y-m-d', strtotime('last Monday', time())).'T00:00:00Z';
+        $monday = (gmdate('N') == 1) ? gmdate('Y-m-d') : gmdate('Y-m-d', strtotime('last Monday'));
+        $monday .= 'T00:00:00Z';
+
         // get next Sunday (night) at midnight UTC
-        $sunday = date('Y-m-d', strtotime('next Sunday', time())).'T23:59:59Z';
-    
+        $sunday = (gmdate('N') == 7) ? gmdate('Y-m-d') : gmdate('Y-m-d', strtotime('next Sunday'));
+        $sunday .= 'T23:59:59Z';
+
         // select the total blocks produced by :proposer from $monday to $sunday
         $sql = "
                 SELECT 
