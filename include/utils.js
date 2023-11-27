@@ -52,6 +52,22 @@ export const fetchBlacklist = async() => {
     return combinedAddresses;
 }
 
+export const fetchBallast = async() => {
+    const blacklistEndpoint = 'https://analytics.testnet.voi.nodly.io/v0/consensus/ballast';
+
+    const response = await fetch(blacklistEndpoint);
+    if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+    }
+
+    const jsonData = await response.json();
+    const combinedAddresses = [
+        ...Object.keys(jsonData.bparts),
+    ].map(account => ({ account }));
+
+    return combinedAddresses;
+}
+
 // iterate over dropList. add addresses to array. if duplicate or invalid address found remove from array and add address to errorList
 // return errorList
 export const removeAndTrackDuplicates = (array, blacklist) => {
