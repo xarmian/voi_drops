@@ -338,8 +338,15 @@ switch($action) {
         // find $data['nodes'] with more than one node with a health_score >= 5.0
         $extraNodeCount = 0.0;
         foreach($data as $d) {
+            // sort $d['nodes'] by health_divisor increasing
+            usort($d['nodes'], function($a, $b) {
+                return $a['health_divisor'] <=> $b['health_divisor'];
+            });
+
             for($i=1;$i<count($d['nodes']);$i++) {
-                if ($d['nodes'][$i]['health_score'] >= 5.0) $extraNodeCount += 1.0/$d['nodes'][$i]['health_divisor'];
+                if ($d['nodes'][$i]['health_score'] >= 5.0) {
+                    $extraNodeCount += 1.0/$d['nodes'][$i]['health_divisor'];
+                }
             }
         }
 
