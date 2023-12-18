@@ -343,9 +343,14 @@ switch($action) {
                 return $a['health_divisor'] <=> $b['health_divisor'];
             });
 
-            for($i=1;$i<count($d['nodes']);$i++) {
+            $hnCount = 0;
+            for($i=0;$i<count($d['nodes']);$i++) {
                 if ($d['nodes'][$i]['health_score'] >= 5.0) {
-                    $extraNodeCount += 1.0/$d['nodes'][$i]['health_divisor'];
+                    $hnCount++;
+                    if ($hnCount > 1) $extraNodeCount += 1.0/$d['nodes'][$i]['health_divisor'];
+                    /*echo '<pre>';
+                    var_dump($d['nodes']);
+                    echo '</pre>';*/
                 }
             }
         }
