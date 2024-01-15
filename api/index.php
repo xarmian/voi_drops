@@ -81,6 +81,8 @@ function fetchWeeklyHealth($blacklist, $date) {
     $qualifyNodeCount = 0;
     $emptyNodeCount = 0;
 
+    $formattedDate = substr($date,0,4).'-'.substr($date,4,2).'-'.substr($date,6,2);
+
     foreach($data as $d) {
         foreach($d[$positions['addresses']] as $pos=>$address) {
             if (in_array($address, $blacklist)) {
@@ -98,6 +100,8 @@ function fetchWeeklyHealth($blacklist, $date) {
         );
 
         if ($d[$positions['score']] >= 5.0) {
+            if ((strtotime($formattedDate) > strtotime('2024-01-08')) && $d[$positions['ver']] != '3.21.0') continue;
+
             $healthyNodeCount++;
             if ((int)$d[$positions['hours']] >= 168) {
                  $qualifyNodeCount++;
@@ -342,12 +346,14 @@ switch($action) {
             usort($d['nodes'], function($a, $b) {
                 return $a['health_divisor'] <=> $b['health_divisor'];
             });
-
-            $hnCount = 0;
+            
+	    $hnCount = 0;
             for($i=0;$i<count($d['nodes']);$i++) {
+                if ((strtotime($endTimestamp) > strtotime('2024-01-08')) && $d['nodes'][$i]['ver'] != '3.21.0') continue;
+
                 if ($d['nodes'][$i]['health_score'] >= 5.0) {
-                    $hnCount++;
-                    if ($hnCount > 1) $extraNodeCount += 1.0/$d['nodes'][$i]['health_divisor'];
+		    $hnCount++;
+		    if ($hnCount > 1) $extraNodeCount += 1.0/$d['nodes'][$i]['health_divisor'];
                     /*echo '<pre>';
                     var_dump($d['nodes']);
                     echo '</pre>';*/
