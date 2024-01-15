@@ -22,6 +22,7 @@
 import fs from 'fs';
 import minimist from 'minimist';
 import { writeToCSV, validateFile, csvToJson } from '../include/utils.js';
+import { compareVersions } from 'compare-versions';
 
 // show help menu and exit
 const exitMenu = (err) => {
@@ -64,7 +65,7 @@ const getFilenameArguments = () => {
 	let proposedBlockCount = 0;
 	let healthy_node_count = 0;
 
-    let url = `https://socksfirstgames.com/proposers/index.php?start=${start_date}&end=${end_date}`;
+    let url = `https://api.voirewards.com/proposers/index_v3.php?start=${start_date}&end=${end_date}`;
 	
 	// add blacklist to url
 	if (blacklist.length > 0) url += `&blacklist=${blacklist.join(',')}`;
@@ -72,6 +73,8 @@ const getFilenameArguments = () => {
 	// if process.env.APIKEY, send as header key/value pair X-Api-Key in fetch()
 	let headers = {};
 	if (typeof process.env.MNEMONIC != 'undefined') headers = { 'X-Api-Key': process.env.APIKEY };
+
+	let MIN_ALGOD_VERSION = '1.0.0';
 
     await fetch(url,{headers: headers, cache: "no-store"})
         .then(response => response.json())
@@ -100,10 +103,19 @@ const getFilenameArguments = () => {
 				proposedBlockCount += row.block_count;
 				//if (Number(row.node.health_score) >= 5.0) healthy_node_count++;
                 totalWallets++;
-            });
-        });
-	
-	console.log('');
+
+				if (row.nodes) {
+					for (let j = 0; j < row.nodes.length; j++) {
+					  const node = row.nodes[j];
+					  if (compareVersions(node.ver,MIN_ALGOD_VERSION)) {
+						MIN_ALGOD_VERSION = node.ver;
+					  }
+					}
+				  }
+			  });
+
+			if (compareVersions(MIN_ALGOD_VERSION,'3.21.0')) MIN_ALGOD_VERSION = '3.18.0';
+		});
 	
 	// order proposers by block count
 	proposers = Object.fromEntries(Object.entries(proposers).sort(([,a],[,b]) => b.blocks - a.blocks));
@@ -122,7 +134,8 @@ const getFilenameArguments = () => {
 
 		// try to get the first index of an element in item.nodes with a health_score >= 5.0
 		let health_reward = 0;
-		const healthyNodeIndex = item.nodes.findIndex(node => node.health_score >= 5.0);
+		const healthyNodeIndex = item.nodes.findIndex((node) => node.health_score >= 5.0 && compareVersions(node.ver,MIN_ALGOD_VERSION) >= 0);
+		//const healthyNodeIndex = item.nodes.findIndex(node => node.health_score >= 5.0);
 		if (healthyNodeIndex !== -1) {
 			health_reward = Math.floor(Math.ceil(epoch_health_reward / healthy_node_count / item.nodes[healthyNodeIndex].health_divisor * Math.pow(10,7)) / 10);
 		}
