@@ -1,6 +1,8 @@
 <?php
 header('Access-Control-Allow-Origin: *');
 
+define('ALGOD_MIN_VERSION','3.21.0');
+
 function fetchBlacklist() {
     $blacklistEndpoint = 'https://analytics.testnet.voi.nodly.io/v0/consensus/ballast';
 
@@ -44,12 +46,24 @@ function fetchWeeklyHealth($blacklist, $date) {
     $healthFiles = glob($healthDir . '/health_week_*.json');
     rsort($healthFiles);
     $latestFile = null;
+    $versionCheckFile = null;
 
     foreach ($healthFiles as $file) {
         if (filesize($file) > 1024) {
             $fileDate = substr(basename($file, '.json'), -8);
             if ($fileDate <= $date) {
                 $latestFile = $file;
+                break;
+            }
+        }
+    }
+
+    // get a file 5 days old to check for health
+    foreach ($healthFiles as $file) {
+        if (filesize($file) > 1024) {
+            $fileDate = substr(basename($file, '.json'), -8);
+            if ($fileDate <= date('Ymd', strtotime('-7 days', strtotime($date)))) {
+                $versionCheckFile = $file;
                 break;
             }
         }
@@ -75,6 +89,26 @@ function fetchWeeklyHealth($blacklist, $date) {
         }
     }
 
+    if (!$versionCheckFile) {
+        $healthCheckData = array();
+    }
+    else {
+        $response = file_get_contents($versionCheckFile);
+        if (!$response) {
+            throw new Exception('HTTP error!');
+        }
+
+        $jsonData = json_decode($response, true);
+
+        $meta = $jsonData['meta'];
+        $versionCheckData = $jsonData['data'];
+
+        $vpositions = array('host'=>null,'name'=>null,'score'=>null,'addresses'=>array());
+        foreach($meta as $pos=>$m) {
+            $vpositions[$m['name']] = $pos;
+        }
+    }
+
     $nodes = array();
     $totalNodeCount = 0;
     $healthyNodeCount = 0;
@@ -90,6 +124,29 @@ function fetchWeeklyHealth($blacklist, $date) {
             }
         }
 
+        // find the node in $versionCheckData
+        $pver = null;
+        foreach($versionCheckData as $v) {
+            if ($v[$vpositions['host']] == $d[$positions['host']]) {
+                $pver = $v[$vpositions['ver']];
+                break;
+            }
+        }
+
+        $isHealthy = false;
+        if ($d[$positions['score']] >= 5.0) {
+            if (!(strtotime($formattedDate) > strtotime('2024-01-08')) || strcasecmp($d[$positions['ver']],ALGOD_MIN_VERSION) == 0) {
+                if ($pver == null || !(strtotime($formattedDate) > strtotime('2024-01-15')) || $pver == ALGOD_MIN_VERSION) {
+
+                    $healthyNodeCount++;
+                    $isHealthy = true;
+                    if ((int)$d[$positions['hours']] >= 168) {
+                        $qualifyNodeCount++;
+                    }
+                }
+            }
+        }
+
         $nodes[] = array(
             'host' => $d[$positions['host']],
             'name' => $d[$positions['name']],
@@ -97,17 +154,9 @@ function fetchWeeklyHealth($blacklist, $date) {
             'addresses' => $d[$positions['addresses']],
             'hours' => $d[$positions['hours']],
 	        'ver' => $d[$positions['ver']],
+            'pver' => $pver,
+            'is_healthy' => $isHealthy,
         );
-
-        if ($d[$positions['score']] >= 5.0) {
-            if ((strtotime($formattedDate) > strtotime('2024-01-08')) && $d[$positions['ver']] != '3.21.0') continue;
-
-            $healthyNodeCount++;
-            if ((int)$d[$positions['hours']] >= 168) {
-                 $qualifyNodeCount++;
-            }
-
-        }
 
         $totalNodeCount++;
     }
@@ -129,6 +178,8 @@ function fetchWeeklyHealth($blacklist, $date) {
                 'health_divisor'=>$node['divisor'],
                 'health_hours'=>$node['hours'],
         		'ver'=>$node['ver'],
+                'pver'=>$node['pver'],
+                'is_healthy'=>$node['is_healthy'],
             );
         }
     }
@@ -381,6 +432,7 @@ switch($action) {
             'empty_node_count' => $health['empty_node_count'],
             'qualify_node_count' => $health['qualify_node_count'],
             'extra_node_count' => $extraNodeCount,
+            'minimum_algod' => ALGOD_MIN_VERSION,
         ));
 
         break;
