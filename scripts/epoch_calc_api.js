@@ -107,16 +107,16 @@ const getFilenameArguments = () => {
 				if (row.nodes) {
 					for (let j = 0; j < row.nodes.length; j++) {
 					  const node = row.nodes[j];
-					  if (compareVersions(node.ver,MIN_ALGOD_VERSION)) {
+					  if (compareVersions(node.ver,MIN_ALGOD_VERSION) > 0) {
 						MIN_ALGOD_VERSION = node.ver;
 					  }
 					}
 				  }
 			  });
 
-			if (compareVersions(MIN_ALGOD_VERSION,'3.21.0')) MIN_ALGOD_VERSION = '3.18.0';
-		});
-	
+			if (compareVersions(MIN_ALGOD_VERSION,'3.21.0') == -1) MIN_ALGOD_VERSION = '3.18.0';
+	});
+	console.log(`Minimum Algod Version: ${MIN_ALGOD_VERSION}`);
 	// order proposers by block count
 	proposers = Object.fromEntries(Object.entries(proposers).sort(([,a],[,b]) => b.blocks - a.blocks));
 
