@@ -135,9 +135,8 @@ function fetchWeeklyHealth($blacklist, $date) {
 
         $isHealthy = false;
         if ($d[$positions['score']] >= 5.0) {
-            if (!(strtotime($formattedDate) > strtotime('2024-01-08')) || strcasecmp($d[$positions['ver']],ALGOD_MIN_VERSION) == 0) {
-                if ($pver == null || !(strtotime($formattedDate) > strtotime('2024-01-22')) || $pver == ALGOD_MIN_VERSION) {
-
+            if (!(strtotime($formattedDate) > strtotime('2024-01-08')) || $d[$positions['ver']] >= ALGOD_MIN_VERSION) {
+                if ($pver == null || !(strtotime($formattedDate) > strtotime('2024-01-22')) || $pver >= ALGOD_MIN_VERSION) {
                     $healthyNodeCount++;
                     $isHealthy = true;
                     if ((int)$d[$positions['hours']] >= 168) {
