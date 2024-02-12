@@ -59,7 +59,7 @@ function fetchWeeklyHealth($blacklist, $date) {
     }
 
     // get a file 5 days old to check for health
-    foreach ($healthFiles as $file) {
+    /*foreach ($healthFiles as $file) {
         if (filesize($file) > 1024) {
             $fileDate = substr(basename($file, '.json'), -8);
             if ($fileDate <= date('Ymd', strtotime('-7 days', strtotime($date)))) {
@@ -67,7 +67,7 @@ function fetchWeeklyHealth($blacklist, $date) {
                 break;
             }
         }
-    }
+    }*/
 
     if (!$latestFile) {
         $data = array();
@@ -125,24 +125,24 @@ function fetchWeeklyHealth($blacklist, $date) {
         }
 
         // find the node in $versionCheckData
-        $pver = null;
+        /*$pver = null;
         foreach($versionCheckData as $v) {
             if ($v[$vpositions['host']] == $d[$positions['host']]) {
                 $pver = $v[$vpositions['ver']];
                 break;
             }
-        }
+        }*/
 
         $isHealthy = false;
         if ($d[$positions['score']] >= 5.0) {
             if (!(strtotime($formattedDate) > strtotime('2024-01-08')) || $d[$positions['ver']] >= ALGOD_MIN_VERSION) {
-                if ($pver == null || !(strtotime($formattedDate) > strtotime('2024-01-22')) || $pver >= ALGOD_MIN_VERSION) {
+                //if ($pver == null || !(strtotime($formattedDate) > strtotime('2024-01-22')) || $pver >= ALGOD_MIN_VERSION) {
                     $healthyNodeCount++;
                     $isHealthy = true;
                     if ((int)$d[$positions['hours']] >= 168) {
                         $qualifyNodeCount++;
                     }
-                }
+                //}
             }
         }
 
@@ -397,13 +397,17 @@ switch($action) {
                 return $a['health_divisor'] <=> $b['health_divisor'];
             });
             
-	    $hnCount = 0;
+	        $hnCount = 0;
             for($i=0;$i<count($d['nodes']);$i++) {
-                if ((strtotime($endTimestamp) > strtotime('2024-01-08')) && $d['nodes'][$i]['ver'] != '3.21.0') continue;
+                if ((strtotime($endTimestamp) > strtotime('2024-01-08')) && $d['nodes'][$i]['ver'] < ALGOD_MIN_VERSION) continue;
+                //if ($pver != null && (strtotime($endTimestamp) > strtotime('2024-01-22')) && $pver < ALGOD_MIN_VERSION) continue;
 
                 if ($d['nodes'][$i]['health_score'] >= 5.0) {
-		    $hnCount++;
-		    if ($hnCount > 1) $extraNodeCount += 1.0/$d['nodes'][$i]['health_divisor'];
+        		    $hnCount++;
+		            if ($hnCount > 1) {
+                        $extraNodeCount += 1.0/$d['nodes'][$i]['health_divisor'];
+                        //var_dump($hnCount);
+                    }
                     /*echo '<pre>';
                     var_dump($d['nodes']);
                     echo '</pre>';*/
