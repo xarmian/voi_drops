@@ -138,7 +138,7 @@ const getFilenameArguments = () => {
 		//const healthyNodeIndex = item.nodes.findIndex((node) => node.health_score >= 5.0 && compareVersions(node.ver,MIN_ALGOD_VERSION) >= 0);
 		const healthyNodeIndex = item.nodes.findIndex(node => node.is_healthy);
 		if (healthyNodeIndex !== -1) {
-			health_reward = Math.floor(Math.ceil(epoch_health_reward / healthy_node_count / item.nodes[healthyNodeIndex].health_divisor * Math.pow(10,7)) / 10);
+			health_reward = Math.floor(Math.floor(epoch_health_reward / healthy_node_count / item.nodes[healthyNodeIndex].health_divisor * Math.pow(10,7)) / 10);
 		}
 
 		// calc health rewards
