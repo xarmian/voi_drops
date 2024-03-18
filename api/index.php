@@ -1,7 +1,7 @@
 <?php
 header('Access-Control-Allow-Origin: *');
 
-define('ALGOD_MIN_VERSION','3.21.0');
+define('ALGOD_MIN_VERSION','3.22.1');
 
 function fetchBlacklist() {
     $blacklistEndpoint = 'https://analytics.testnet.voi.nodly.io/v0/consensus/ballast';
@@ -35,6 +35,21 @@ function fetchBlacklist() {
                 if (strlen(trim($data[0])) > 0) {
                     $combinedAddresses[] = trim($data[0]);
                 }
+            }
+        }
+    }
+    return $combinedAddresses;
+}
+
+function fetchBlacklistHealth() {
+    $combinedAddresses = array();
+
+    // read in blacklist from blacklist_health.csv
+    if (file_exists('blacklist_health.csv')) {
+        $fp = fopen('blacklist_health.csv','r');
+        while (($data = fgetcsv($fp, 0, ",")) !== FALSE) {
+            if (strlen(trim($data[0])) > 0) {
+                $combinedAddresses[] = trim($data[0]);
             }
         }
     }
@@ -359,6 +374,9 @@ switch($action) {
 
         // Fetch the blacklist
         $blacklist = fetchBlacklist();
+
+        // fetch separate health blacklist then merge with main blacklist
+        $blacklist_health = array_merge($blacklist,fetchBlacklistHealth());
 
         // Fetch weekly health data
         $health = fetchWeeklyHealth($blacklist,date('Ymd', strtotime('+1 day', strtotime($endTimestamp))));

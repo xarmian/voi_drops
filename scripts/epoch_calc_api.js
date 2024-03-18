@@ -22,7 +22,7 @@
 import fs from 'fs';
 import minimist from 'minimist';
 import { writeToCSV, validateFile, csvToJson } from '../include/utils.js';
-// import { compareVersions } from 'compare-versions';
+import { compare, compareVersions } from 'compare-versions';
 
 // show help menu and exit
 const exitMenu = (err) => {
@@ -87,6 +87,8 @@ const getFilenameArguments = () => {
 
             let totalWallets = 0;
 
+			MIN_ALGOD_VERSION = data.minimum_algod;
+
 			dataArrays.forEach(row => {
 				if (blacklist.includes(row.proposer)) {
 					// if proposer is in blacklist and health_divisor == 1, subtract from healthy_node_count
@@ -96,26 +98,36 @@ const getFilenameArguments = () => {
 
 					return;
 				}
-				proposers[row.proposer] = { 
-					blocks: row.block_count,
-					nodes: row.nodes,
-				};
-				proposedBlockCount += row.block_count;
+
+				let nodeVer = '0';
+				if (row.nodes) {
+					for (let j = 0; j < row.nodes.length; j++) {
+					  const node = row.nodes[j];
+					  if (node.ver && compareVersions(node.ver,nodeVer) >= 0) {
+						nodeVer = node.ver;
+					  }
+					}
+				}
+
+				if (nodeVer && compareVersions(nodeVer,MIN_ALGOD_VERSION) >= 0) {
+					proposers[row.proposer] = { 
+						blocks: row.block_count,
+						nodes: row.nodes,
+					};
+					proposedBlockCount += row.block_count;
+				}
+				else {
+					proposers[row.proposer] = {
+						blocks: 0,
+						nodes: row.nodes,
+					};
+				}
+
 				//if (Number(row.node.health_score) >= 5.0) healthy_node_count++;
                 totalWallets++;
 
-				/*if (row.nodes) {
-					for (let j = 0; j < row.nodes.length; j++) {
-					  const node = row.nodes[j];
-					  if (compareVersions(node.ver,MIN_ALGOD_VERSION) > 0) {
-						MIN_ALGOD_VERSION = node.ver;
-					  }
-					}
-				  }*/
 			  });
 
-			//if (compareVersions(MIN_ALGOD_VERSION,'3.21.0') == -1) MIN_ALGOD_VERSION = '3.18.0';
-			MIN_ALGOD_VERSION = data.minimum_algod;
 	});
 	console.log(`Minimum Algod Version: ${MIN_ALGOD_VERSION}`);
 	// order proposers by block count
