@@ -109,7 +109,7 @@ const getFilenameArguments = () => {
 					}
 				}
 
-				if (nodeVer && compareVersions(nodeVer,MIN_ALGOD_VERSION) >= 0) {
+				if (nodeVer && (compareVersions(nodeVer,MIN_ALGOD_VERSION) >= 0 || nodeVer === '0')) {
 					proposers[row.proposer] = { 
 						blocks: row.block_count,
 						nodes: row.nodes,
