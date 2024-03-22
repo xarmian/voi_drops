@@ -63,6 +63,9 @@ function fetchWeeklyHealth($blacklist, $date) {
     $latestFile = null;
     $versionCheckFile = null;
 
+    // fetch separate health blacklist then merge with main blacklist
+    $blacklist_health = fetchBlacklistHealth();
+
     foreach ($healthFiles as $file) {
         if (filesize($file) > 1024) {
             $fileDate = substr(basename($file, '.json'), -8);
@@ -133,9 +136,13 @@ function fetchWeeklyHealth($blacklist, $date) {
     $formattedDate = substr($date,0,4).'-'.substr($date,4,2).'-'.substr($date,6,2);
 
     foreach($data as $d) {
+        $health_exclude = array();
         foreach($d[$positions['addresses']] as $pos=>$address) {
             if (in_array($address, $blacklist)) {
                 unset($d[$positions['addresses']][$pos]);
+            }
+            else if (in_array($address, $blacklist_health)) {
+                $health_exclude[] = $address;
             }
         }
 
@@ -150,7 +157,7 @@ function fetchWeeklyHealth($blacklist, $date) {
 
         $isHealthy = false;
         if ($d[$positions['score']] >= 5.0) {
-            if (!(strtotime($formattedDate) > strtotime('2024-01-08')) || $d[$positions['ver']] >= ALGOD_MIN_VERSION) {
+            if (!(strtotime($formattedDate) > strtotime('2024-01-08')) || version_compare($d[$positions['ver']],ALGOD_MIN_VERSION) >= 0) {
                 //if ($pver == null || !(strtotime($formattedDate) > strtotime('2024-01-22')) || $pver >= ALGOD_MIN_VERSION) {
                     $healthyNodeCount++;
                     $isHealthy = true;
@@ -168,8 +175,9 @@ function fetchWeeklyHealth($blacklist, $date) {
             'addresses' => $d[$positions['addresses']],
             'hours' => $d[$positions['hours']],
 	        'ver' => $d[$positions['ver']],
-            'pver' => $pver,
+            //'pver' => $pver,
             'is_healthy' => $isHealthy,
+            'health_exclude' => $health_exclude,
         );
 
         $totalNodeCount++;
@@ -178,11 +186,11 @@ function fetchWeeklyHealth($blacklist, $date) {
     // map $nodes array to use addresses as keys
     $addresses = array();
     foreach($nodes as $node) {
-        if (count($node['addresses']) == 0 && $node['score'] >= 5.0) {
+        if (count($node['addresses']) <= count($node['health_exclude']) && $node['score'] >= 5.0 && version_compare($node['ver'],ALGOD_MIN_VERSION) >= 0) {
             $emptyNodeCount++;
         }
 
-        $node['divisor'] = count($node['addresses']);
+        $node['divisor'] = count($node['addresses']) - count($node['health_exclude']);
         if (!isset($node['addresses'])) $node['addresses'] = array();
         foreach($node['addresses'] as $address) {
             $addresses[$address][] = array(
@@ -192,8 +200,8 @@ function fetchWeeklyHealth($blacklist, $date) {
                 'health_divisor'=>$node['divisor'],
                 'health_hours'=>$node['hours'],
         		'ver'=>$node['ver'],
-                'pver'=>$node['pver'],
-                'is_healthy'=>$node['is_healthy'],
+                //'pver'=>$node['pver'],
+                'is_healthy'=>(in_array($address,$node['health_exclude']) ? false : $node['is_healthy']),
             );
         }
     }
@@ -375,9 +383,6 @@ switch($action) {
         // Fetch the blacklist
         $blacklist = fetchBlacklist();
 
-        // fetch separate health blacklist then merge with main blacklist
-        $blacklist_health = array_merge($blacklist,fetchBlacklistHealth());
-
         // Fetch weekly health data
         $health = fetchWeeklyHealth($blacklist,date('Ymd', strtotime('+1 day', strtotime($endTimestamp))));
 
@@ -417,7 +422,7 @@ switch($action) {
             
 	        $hnCount = 0;
             for($i=0;$i<count($d['nodes']);$i++) {
-                if ((strtotime($endTimestamp) > strtotime('2024-01-08')) && $d['nodes'][$i]['ver'] < ALGOD_MIN_VERSION) continue;
+                if ((strtotime($endTimestamp) > strtotime('2024-01-08')) && version_compare($d['nodes'][$i]['ver'],ALGOD_MIN_VERSION) == -1) continue;
                 //if ($pver != null && (strtotime($endTimestamp) > strtotime('2024-01-22')) && $pver < ALGOD_MIN_VERSION) continue;
 
                 if ($d['nodes'][$i]['health_score'] >= 5.0) {
