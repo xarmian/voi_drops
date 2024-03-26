@@ -178,6 +178,7 @@ const decimalDivisor = 1000000;
 	// convert sortedBalances to an array of objects
 	const sortedBalancesArray = sortedBalances.map(([account, { voiBalance, viaBalance }]) => ({
 		account,
+		'userType:': 'snapshot',
 		//voiBalance: voiBalance.toString(),
 		//viaBalance: viaBalance.toString(),
 		totalBalance: (voiBalance + viaBalance).toString(),
