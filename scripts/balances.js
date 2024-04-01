@@ -1,15 +1,13 @@
 /*
 
-	Script to put accounts into buckets based on their balance as a percentage of total tokens
+	Script to snapshot Voi and Via balances and output to a CSV file
 
-	Usage: node buckets.js
+	Usage: npm run balances -- -a [account] [-r round] [-b blacklist.csv]
 
-	Status: INCOMPLETE
-
-	Todo:
-		- Accept CLI parameter for maximum number of accounts
-		- Loop until reaching max account
-		- Write results to CSV
+	All parameters are optional:
+	- If no account is provided, script will iterate and snapshot balances for all accounts
+	- If no round is provided, script will snapshot the current round
+	- If no blacklist is provided, script will not filter out any accounts
 
 */
 
@@ -46,11 +44,19 @@ function getAllTransactions(txns) {
 (async () => {
 	const [ checkRound, blacklistFileName, acct ] = getFilenameArguments();
 
+	// get current round from algod
+	const status = await algod.status().do();
+	const currentRound = status['last-round'];
+
+	console.log(`Performing snapshot at round ${checkRound ?? currentRound}`);
+
     let blacklist = []; // list of addresses to not send to
     if (blacklistFileName != null && blacklistFileName != false) {
         if (fs.existsSync(blacklistFileName) && validateFile(blacklistFileName)) {
             blacklist = await csvToJson(blacklistFileName);
         }
+
+		console.log(`Loaded ${blacklist.length} blacklisted accounts from ${blacklistFileName}`);
     }
 
 	// map blacklist to array of addresses
@@ -111,8 +117,6 @@ function getAllTransactions(txns) {
 		0
 	  );
 	  
-	  console.log("Last Round", lastRound);
-	  
 	  const arc200_TransferR = await ci.arc200_Transfer({
 		minRound: lastRound > 0 ? lastRound + 1 : 0,
 	  });
@@ -130,6 +134,8 @@ function getAllTransactions(txns) {
 
 	let balancesList = {};
 	let nextToken = null;
+
+	console.log(`Retrieving VOI balances...`);
 
 	do {
 		// Fetch accounts using the indexer (with a limit, e.g., 100 accounts per request)
@@ -222,6 +228,8 @@ function getAllTransactions(txns) {
 		nextToken = response['next-token'];
 	} while (nextToken);
 
+	console.log(`Snapshot of ${Object.keys(balancesList).length} VOI Account Balances completed`);
+
 	const balance = new Map();
 
 	let round = (checkRound == null) ? Number.MAX_SAFE_INTEGER : checkRound;
@@ -253,6 +261,9 @@ function getAllTransactions(txns) {
 		console.log(`Total: ${Number(balancesList[acct].voiBalance + viaBalance)/decimalDivisor}`);
 		process.exit();
 	}
+
+	// output number of balance entries
+	console.log(`Calcualted Snapshot of VIA balances for ${balance.size} accounts`);
   
 	// for each account in balance map, add the amount to the viaBalance property in balancesList
 	for (const [account, amount] of balance.entries()) {

@@ -112,6 +112,22 @@ proposers API.
 
 Usage: `npm run block_follower -- [-f FILENAME]`
 
+# Account Balance Snapshot Tool - balances.js
+
+This script calculates the account balances of all accounts with a VOI or VIA balance.
+By default the snapshot will be taken of the current block at the time the script is executed.
+An optional -r parameter may be provided to specify the snapshot block.
+
+Usage: `npm run balances -- -a [account] [-r round] [-b blacklist.csv]`
+
+All parameters are optional:
+- If no account is provided, script will iterate and snapshot balances for all accounts
+- If no round is provided, script will snapshot the current round
+- If no blacklist is provided, script will not filter out any accounts
+
+If the -a parameter is used, the output will only be to the screen. If the -a parameter is not provided,
+the current balances will be written to the file `balances.csv`.
+
 # Environment Variables
 
 Environment variables can be stored in a `.env` file in the root folder. A sample env file is located in the root
