@@ -14,17 +14,47 @@
 */
 
 import { algod, indexer } from '../include/algod.js';
-import { writeToCSV } from '../include/utils.js';
+import { writeToCSV, csvToJson, validateFile } from '../include/utils.js';
 import { arc200 } from "ulujs";
 import fs from 'fs';
+import minimist from 'minimist';
 
 const VIA_ID = 6779767;
 const zeroAddr = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ";
 const ci = new arc200(VIA_ID, algod, indexer);
 const decimalDivisor = 1000000;
 
+const getFilenameArguments = () => {
+    const args = minimist(process.argv.slice(2));
+    let checkRound = (args.r)??=null;
+    let blacklistFileName = (args.b)??=null;
+	let acct = (args.a)??=null;
+    return [ checkRound, blacklistFileName, acct ];
+}
+
+function getAllTransactions(txns) {
+    let payments = [];
+    if (txns === undefined) return payments;
+    for (const t of txns) {
+        payments.push(t);
+        if (t['inner-txns']) payments = payments.concat(getAllTransactions(t['inner-txns']));
+    }
+    
+    return payments;
+}
 
 (async () => {
+	const [ checkRound, blacklistFileName, acct ] = getFilenameArguments();
+
+    let blacklist = []; // list of addresses to not send to
+    if (blacklistFileName != null && blacklistFileName != false) {
+        if (fs.existsSync(blacklistFileName) && validateFile(blacklistFileName)) {
+            blacklist = await csvToJson(blacklistFileName);
+        }
+    }
+
+	// map blacklist to array of addresses
+	blacklist = blacklist.map(item => item.account);
 
 	// get metadata
 	const arc200_nameR = await ci.arc200_name();
@@ -103,12 +133,89 @@ const decimalDivisor = 1000000;
 
 	do {
 		// Fetch accounts using the indexer (with a limit, e.g., 100 accounts per request)
-		const response = await indexer.searchAccounts().limit(100).nextToken(nextToken).do();
+		let response = {};
+		if (acct != null) {
+			const accountResp = await indexer.lookupAccountByID(acct).do();
+			response = {
+				accounts: [accountResp.account],
+			};
+		}
+		else {
+			response = await indexer.searchAccounts().nextToken(nextToken).do();
+		}
 
 		for (const account of response.accounts) {
-			balancesList[account.address] = {
-				voiBalance: BigInt(account.amount),
-				viaBalance: BigInt(0),
+			// check if account is in blacklist
+			if (blacklist.includes(account.address) || account.address.substring(0, 4) === 'SPAM' || account.address.substring(0,6) === 'STRESS') {
+				continue;
+			}
+
+			if (checkRound == null) {
+				// get the balance of the account at the current round
+				/*const accountInfo = await indexer.lookupAccountByID(account.address).do();
+				balancesList[account.address] = {
+					voiBalance: BigInt(accountInfo['account'].amount),
+					viaBalance: BigInt(0),
+				}
+				*/
+				balancesList[account.address] = {
+					voiBalance: BigInt(account.amount??0),
+					viaBalance: BigInt(0),
+				}
+			}
+			else {
+				// get all transactions for the account
+				const transactions = await indexer.searchForTransactions()
+					.address(account.address)
+					.maxRound(Number(checkRound))
+					.do();
+
+				let txns = getAllTransactions(transactions.transactions);
+				let numIterations = 1;
+
+				// Fetch remaining transactions in chunks if there are more than 100
+				while (transactions['next-token']) {
+					numIterations++;
+
+					const nextTransactions = await indexer.searchForTransactions()
+						.address(account.address)
+						.maxRound(Number(checkRound))
+						//.limit(100)
+						.nextToken(transactions['next-token'])
+						.do();
+
+					txns = txns.concat(getAllTransactions(nextTransactions.transactions));
+					transactions['next-token'] = nextTransactions['next-token'];
+
+					if (acct == null && numIterations > 100) {
+						console.log(`Account ${account.address} has more than ${txns.length} transactions at round ${checkRound}`);
+						break;
+					}
+				}
+
+				// get the balance of the account at checkRound
+				const snapshot = txns.reduce((acc, tx) => {
+					if (tx['sender'] === account.address) {
+						acc.amount -= BigInt(tx['payment-transaction']?.amount ?? 0) + BigInt(tx['fee'] ?? 0);
+					}
+					if (tx['payment-transaction']?.receiver === account.address) {
+						acc.amount += BigInt(tx['payment-transaction']?.amount ?? 0);
+					}
+					if (tx['payment-transaction']?.['close-remainder-to'] === account.address) {
+						acc.amount += BigInt(tx['payment-transaction']?.['close-amount'] ?? 0);
+					}
+					return acc;
+				}, { amount: BigInt(0) });
+
+				balancesList[account.address] = {
+					voiBalance: snapshot.amount,
+					viaBalance: BigInt(0),
+				};
+
+				//console.log(account.address,Number(snapshot.amount)/Math.pow(10,6));
+
+				// sleep for 1 second to avoid rate limiting
+				//await new Promise((resolve) => setTimeout(resolve, 1000));
 			}
 		}
 
@@ -117,7 +224,7 @@ const decimalDivisor = 1000000;
 
 	const balance = new Map();
 
-	let round = Number.MAX_SAFE_INTEGER;
+	let round = (checkRound == null) ? Number.MAX_SAFE_INTEGER : checkRound;
 	balance.set(zeroAddr, BigInt(token.totalSupply));
 	for (const [
 	  txID,
@@ -135,6 +242,16 @@ const decimalDivisor = 1000000;
 	  }
 	  balance.set(from, balance.get(from) - BigInt(amount));
 	  balance.set(to, balance.get(to) + BigInt(amount));
+	}
+
+	if (acct != null) {
+		// output the account's calculated balances to the console
+		const viaBalance = balance.get(acct)??BigInt(0);
+		console.log(`Account: ${acct}`);
+		console.log(`VOI: ${Number(balancesList[acct].voiBalance)/decimalDivisor}`);
+		console.log(`VIA: ${Number(viaBalance)/decimalDivisor}`);
+		console.log(`Total: ${Number(balancesList[acct].voiBalance + viaBalance)/decimalDivisor}`);
+		process.exit();
 	}
   
 	// for each account in balance map, add the amount to the viaBalance property in balancesList
@@ -178,9 +295,9 @@ const decimalDivisor = 1000000;
 	// convert sortedBalances to an array of objects
 	const sortedBalancesArray = sortedBalances.map(([account, { voiBalance, viaBalance }]) => ({
 		account,
-		'userType:': 'snapshot',
-		//voiBalance: voiBalance.toString(),
-		//viaBalance: viaBalance.toString(),
+		userType: 'snapshot',
+		voiBalance: voiBalance.toString(),
+		viaBalance: viaBalance.toString(),
 		totalBalance: (voiBalance + viaBalance).toString(),
 		notes: JSON.stringify({ voi: (Number(voiBalance)/decimalDivisor), via: (Number(viaBalance)/decimalDivisor), total: (Number(voiBalance + viaBalance)/decimalDivisor) }),
 	}));
