@@ -82,7 +82,7 @@ Usage: `npm run epoch_calc_api -- -s START -e END -r EPOCHREWARD [-f FILENAME] [
 Example: `npm run epoch_calc_api -- -s 240000 -e 250000 -r 2500000 -f rewards.csv -b blacklist.csv`
 Example: `npm run epoch_calc_api -- -s 2023-09-25 -e 2023-10-01 -r 2500000 -f rewards.csv -b blacklist.csv`
 
-# Account bucketing scirpt - buckets.js
+# Account bucketing script - buckets.js
 
 Usage: `npm run buckets`
 
