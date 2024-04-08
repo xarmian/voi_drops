@@ -62,7 +62,7 @@ function getAllTransactions(txns) {
 	// map blacklist to array of addresses
 	blacklist = blacklist.map(item => item.account);
 
-	// get metadata
+	// get metadata -- THANKS SHELLY (code borrowed from https://github.com/NautilusOSS/arc200-snapshot)
 	const arc200_nameR = await ci.arc200_name();
 	if (!arc200_nameR.success) {
 		console.error("Error getting metadata");
@@ -132,10 +132,22 @@ function getAllTransactions(txns) {
 		)
 	  );	  
 
-	let balancesList = {};
-	let nextToken = null;
+
+	const genesisBalances = {};
+
+	if (checkRound != null) {
+		// assign VOI balances at genesis
+		const genesisAccounts = (await algod.genesis().do()).alloc;
+
+		for (const account of genesisAccounts) {
+			genesisBalances[account.addr] = BigInt(account.state.algo)
+		}
+	}
 
 	console.log(`Retrieving VOI balances...`);
+
+	let balancesList = {};
+	let nextToken = null;
 
 	do {
 		// Fetch accounts using the indexer (with a limit, e.g., 100 accounts per request)
@@ -155,6 +167,8 @@ function getAllTransactions(txns) {
 			if (blacklist.includes(account.address) || account.address.substring(0, 4) === 'SPAM' || account.address.substring(0,6) === 'STRESS') {
 				continue;
 			}
+
+			console.log(`Retrieving balance for ${account.address}`);
 
 			if (checkRound == null) {
 				// get the balance of the account at the current round
@@ -193,7 +207,7 @@ function getAllTransactions(txns) {
 					txns = txns.concat(getAllTransactions(nextTransactions.transactions));
 					transactions['next-token'] = nextTransactions['next-token'];
 
-					if (acct == null && numIterations > 100) {
+					if (acct == null && numIterations > 1000) {
 						console.log(`Account ${account.address} has more than ${txns.length} transactions at round ${checkRound}`);
 						break;
 					}
@@ -214,14 +228,9 @@ function getAllTransactions(txns) {
 				}, { amount: BigInt(0) });
 
 				balancesList[account.address] = {
-					voiBalance: snapshot.amount,
+					voiBalance: (genesisBalances[account.address]??BigInt(0)) + snapshot.amount,
 					viaBalance: BigInt(0),
 				};
-
-				//console.log(account.address,Number(snapshot.amount)/Math.pow(10,6));
-
-				// sleep for 1 second to avoid rate limiting
-				//await new Promise((resolve) => setTimeout(resolve, 1000));
 			}
 		}
 
@@ -263,7 +272,7 @@ function getAllTransactions(txns) {
 	}
 
 	// output number of balance entries
-	console.log(`Calcualted Snapshot of VIA balances for ${balance.size} accounts`);
+	console.log(`Calculated Snapshot of VIA balances for ${balance.size} accounts`);
   
 	// for each account in balance map, add the amount to the viaBalance property in balancesList
 	for (const [account, amount] of balance.entries()) {

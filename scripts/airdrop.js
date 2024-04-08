@@ -25,13 +25,15 @@ import algosdk from 'algosdk';
 import fs from 'fs';
 import minimist from 'minimist';
 import csvWriter from 'csv-writer';
-import { algod } from '../include/algod.js';
+import { algod, indexer } from '../include/algod.js';
 import { sleep, fetchBlacklist, validateFile, removeAndTrackDuplicates, removeInvalidAddresses, sanitizeWithRemovals, csvToJson } from '../include/utils.js';
+import Contract from 'arc200js';
 
 const FLAT_FEE = 1000; // flat fee amount, 1000 microvoi == .001 voi
 
-const atomicToDisplay = (amount) => {
-    return amount / Math.pow(10,6);
+const atomicToDisplay = (amount, decimals) => {
+    if (decimals === undefined) decimals = 6;
+    return amount / Math.pow(10, decimals);
 }
 
 // show help menu and exit
@@ -49,10 +51,11 @@ const getFilenameArguments = () => {
     let testMode = (args.t)??=false;
     let note = (args.n)??='';
     let groupSize = (args.g)??=1;
-    return [ acctList, blackList, mnemonic, testMode, groupSize, note ];
+    let arc200TokenId = (args.v)??=null;
+    return [ acctList, blackList, mnemonic, testMode, groupSize, note, arc200TokenId ];
 }
 
-const transferTokens = async (sender,array, successStream, errorStream, groupSize, testMode, note) => {
+const transferTokens = async (sender,array, successStream, errorStream, groupSize, testMode, note, contract) => {
     let successList = [];
     let errorList = [];
     const enc = new TextEncoder();
@@ -69,55 +72,69 @@ const transferTokens = async (sender,array, successStream, errorStream, groupSiz
         try {
             let obj = array[i];
 
-            // skip zero token amounts
-            if (obj.tokenAmount > 0) {
-                if (obj.note !== undefined && note !== undefined) {
-                    try {
-                        obj.note = JSON.parse(obj.note);
-                        obj.note['note'] = note;
-                        obj.note = JSON.stringify(obj.note);
-                    } catch (e) {
-                        // obj.note is not json, ignore
-                    }
+            if (contract != null) {
+                if (testMode) {
+                    console.log(`Test mode: Transfer from ${obj.tokenAmount} to ${obj.account}, ${obj.tokenAmount}`);
                 }
+                else {
+                    const resp = await contract.arc200_transfer(obj.account, BigInt(obj.tokenAmount), false, false);
 
-                const txn = algosdk.makePaymentTxnWithSuggestedParams(sender.addr, obj.account, parseInt(obj.tokenAmount), undefined, enc.encode(obj.note || note),params);
-                // Using the receiver transaction as a lease
-                // This prevents the airdrop script from sending a rewards payment twice in a 1000 round range
-                txn.lease = algosdk.decodeAddress(obj.account).publicKey;
-
-                txGroup.push(txn);
-                objInGroup.push(obj);
-            }
-            if (txGroup.length < groupSize && i < (array.length-1)) continue;
-            
-            // assign group ID
-            algosdk.assignGroupID(txGroup);
-
-            // sign transactions
-            const signedTxns = [];
-            for (let tid in txGroup) {
-                let t = txGroup[tid];
-                objInGroup[tid].txId = t.txID().toString();
-                signedTxns.push(t.signTxn(sender.sk));
-            }
-
-            if (testMode) {
-                for (let o of objInGroup) {
-                    successList.push(o);
-                    console.log(`Test mode: Sent ${o.tokenAmount} to ${o.account}`);
+                    obj.txId = resp.txId;
+                    successList.push(obj);
+                    await successStream.writeRecords(successList);
                 }
             }
             else {
-                const { txId } = await algod.sendRawTransaction(signedTxns).do();
-                let confirmedTxn = await waitForConfirmation(algod, txId, 8);
-                if (confirmedTxn) {
-                    for (let o of objInGroup) {
-                        successList.push(o);
-                        console.log(`Sent ${o.tokenAmount} to ${o.account}`);
+                // skip zero token amounts
+                if (obj.tokenAmount > 0) {
+                    if (obj.note !== undefined && note !== undefined) {
+                        try {
+                            obj.note = JSON.parse(obj.note);
+                            obj.note['note'] = note;
+                            obj.note = JSON.stringify(obj.note);
+                        } catch (e) {
+                            // obj.note is not json, ignore
+                        }
                     }
 
-                    await successStream.writeRecords(objInGroup);
+                    const txn = algosdk.makePaymentTxnWithSuggestedParams(sender.addr, obj.account, parseInt(obj.tokenAmount), undefined, enc.encode(obj.note || note),params);
+                    // Using the receiver transaction as a lease
+                    // This prevents the airdrop script from sending a rewards payment twice in a 1000 round range
+                    txn.lease = algosdk.decodeAddress(obj.account).publicKey;
+
+                    txGroup.push(txn);
+                    objInGroup.push(obj);
+                }
+                if (txGroup.length < groupSize && i < (array.length-1)) continue;
+                
+                // assign group ID
+                algosdk.assignGroupID(txGroup);
+
+                // sign transactions
+                const signedTxns = [];
+                for (let tid in txGroup) {
+                    let t = txGroup[tid];
+                    objInGroup[tid].txId = t.txID().toString();
+                    signedTxns.push(t.signTxn(sender.sk));
+                }
+
+                if (testMode) {
+                    for (let o of objInGroup) {
+                        successList.push(o);
+                        console.log(`Test mode: Sent ${o.tokenAmount} to ${o.account}`);
+                    }
+                }
+                else {
+                    const { txId } = await algod.sendRawTransaction(signedTxns).do();
+                    let confirmedTxn = await waitForConfirmation(algod, txId, 8);
+                    if (confirmedTxn) {
+                        for (let o of objInGroup) {
+                            successList.push(o);
+                            console.log(`Sent ${o.tokenAmount} to ${o.account}`);
+                        }
+
+                        await successStream.writeRecords(objInGroup);
+                    }
                 }
             }
         } catch (error) {
@@ -149,7 +166,7 @@ const waitForConfirmation = async (algod, txId, timeout) => {
 }
 
 (async () => {
-    let [ acctFileName, blacklistFileName, paramMnemonic, testMode, groupSize, note ] = getFilenameArguments();
+    let [ acctFileName, blacklistFileName, paramMnemonic, testMode, groupSize, note, arc200TokenId ] = getFilenameArguments();
 
     // handle accotFileName
     if (acctFileName == null || acctFileName == false) exitMenu('Invalid command line arguments');
@@ -202,7 +219,42 @@ const waitForConfirmation = async (algod, txId, timeout) => {
     console.log(`Sender account ID: ${sender.addr}`);
     console.log(`Sender balance: ${atomicToDisplay(senderAccountInfo.amount)}`);
 
-	let [ dropList, errorDropList ] = removeAndTrackDuplicates(origDropList);
+    let contract = null;
+    let arcBal = null;
+    let decimals = 6;
+
+    // display token info if arc200TokenId is specified
+    if (arc200TokenId != null) {
+        try {
+            const opts = {
+                acc: sender,
+                simulate: false,
+                waitForConfirmation: true,
+            };
+            contract = new Contract(arc200TokenId, algod, indexer, opts);
+            arcBal = await contract.arc200_balanceOf(sender.addr);
+            
+            if (arcBal.error) throw new Error(arcBal.error);
+            console.log(`Sender ARC200 balance: ${arcBal.returnValue}`)
+
+            const metaData = (await contract.getMetadata()).returnValue;
+            console.log();
+            console.log(`ARC200 Metadata for token ID ${arc200TokenId}:`);
+            console.log(` Name: ${metaData.name}`);
+            console.log(` Symbol: ${metaData.symbol}`);
+            console.log(` Total Supply: ${metaData.totalSupply}`);
+            console.log(` Decimals: ${metaData.decimals}`);
+            console.log();
+
+            decimals = Number(metaData.decimals);
+
+        }
+        catch (error) {
+            console.log(`Error retrieving ARC200 token info: ${error}`);
+        }
+    }
+
+    let [ dropList, errorDropList ] = removeAndTrackDuplicates(origDropList);
     [ dropList, errorDropList ] = removeInvalidAddresses(dropList, errorDropList);
 
     // check senderAccountInfo.amount against total tokens to be sent
@@ -220,11 +272,16 @@ const waitForConfirmation = async (algod, txId, timeout) => {
     };
 
     // display total tokens to be sent
-    console.log(`Total tokens to be sent: ${atomicToDisplay(totalTokens)}`);
+    console.log(`Total tokens to be sent: ${atomicToDisplay(totalTokens,decimals)}`);
     console.log(`Estimated tx fees: ${atomicToDisplay(estimateTxFees)}`);
     console.log(`Total wallets: ${dropList.length}`);
     console.log(`Number of wallets with token amount greater than zero: ${count}`);
     console.log('');
+
+    if (count == 0) {
+        console.log('No accounts to sent to. Exiting...');
+        process.exit();
+    }
     
     // pause for enter key press to continue
     console.log('Press ENTER to continue, Q to quit...');
@@ -263,7 +320,7 @@ const waitForConfirmation = async (algod, txId, timeout) => {
         append: resume,
     });
 
-	const [ successDropList, errList ] = await transferTokens(sender,dropList, successStream, errorStream, groupSize, testMode, note);
+	const [ successDropList, errList ] = await transferTokens(sender,dropList, successStream, errorStream, groupSize, testMode, note, contract);
     errorDropList = errorDropList.concat(errList);
 
 	process.exit();

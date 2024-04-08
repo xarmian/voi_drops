@@ -1,6 +1,6 @@
 {
   "name": "reward_drop",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Reward airdrop script for block proposers",
   "main": "index.js",
   "scripts": {
@@ -28,6 +28,6 @@
     "minimist": "^1.2.8",
     "node-fetch": "^3.3.2",
     "sqlite3": "^5.1.6",
-    "ulujs": "^0.2.21"
+    "ulujs": "^0.3.3"
   }
 }
