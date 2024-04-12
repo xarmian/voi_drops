@@ -80,7 +80,7 @@ const transferTokens = async (sender,array, successStream, errorStream, groupSiz
                     const resp = await contract.arc200_transfer(obj.account, BigInt(obj.tokenAmount), false, false);
 
                     obj.txId = resp.txId;
-                    successList.push(obj);
+                    successList = [obj];
                     await successStream.writeRecords(successList);
                 }
             }
