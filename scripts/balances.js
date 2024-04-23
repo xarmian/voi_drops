@@ -148,6 +148,7 @@ function getAllTransactions(txns) {
 
 	let balancesList = {};
 	let nextToken = null;
+	let skipList = [];
 
 	do {
 		// Fetch accounts using the indexer (with a limit, e.g., 100 accounts per request)
@@ -184,51 +185,44 @@ function getAllTransactions(txns) {
 				}
 			}
 			else {
-				// get all transactions for the account
-				const transactions = await indexer.searchForTransactions()
-					.address(account.address)
-					.maxRound(Number(checkRound))
-					.do();
+				// get all transactions for the account and calculate balance
+				let balance = BigInt(0);
+				let nextToken = null;
+				let numIterations = 0;
 
-				let txns = getAllTransactions(transactions.transactions);
-				let numIterations = 1;
-
-				// Fetch remaining transactions in chunks if there are more than 100
-				while (transactions['next-token']) {
+				do {
 					numIterations++;
 
-					const nextTransactions = await indexer.searchForTransactions()
+					const transactions = await indexer.searchForTransactions()
 						.address(account.address)
 						.maxRound(Number(checkRound))
-						//.limit(100)
-						.nextToken(transactions['next-token'])
+						.nextToken(nextToken)
+						.limit(1000)
 						.do();
 
-					txns = txns.concat(getAllTransactions(nextTransactions.transactions));
-					transactions['next-token'] = nextTransactions['next-token'];
+					for (const tx of transactions.transactions) {
+						if (tx['sender'] === account.address) {
+							balance -= BigInt(tx['payment-transaction']?.amount ?? 0) + BigInt(tx['fee'] ?? 0);
+						}
+						if (tx['payment-transaction']?.receiver === account.address) {
+							balance += BigInt(tx['payment-transaction']?.amount ?? 0);
+						}
+						if (tx['payment-transaction']?.['close-remainder-to'] === account.address) {
+							balance += BigInt(tx['payment-transaction']?.['close-amount'] ?? 0);
+						}
+					}
+
+					nextToken = transactions['next-token'];
 
 					if (acct == null && numIterations > 1000) {
-						console.log(`Account ${account.address} has more than ${txns.length} transactions at round ${checkRound}`);
+						console.log(`Account ${account.address} has more than ${numIterations * 1000} transactions at round ${checkRound}`);
+						skipList.push(account.address);
 						break;
 					}
-				}
-
-				// get the balance of the account at checkRound
-				const snapshot = txns.reduce((acc, tx) => {
-					if (tx['sender'] === account.address) {
-						acc.amount -= BigInt(tx['payment-transaction']?.amount ?? 0) + BigInt(tx['fee'] ?? 0);
-					}
-					if (tx['payment-transaction']?.receiver === account.address) {
-						acc.amount += BigInt(tx['payment-transaction']?.amount ?? 0);
-					}
-					if (tx['payment-transaction']?.['close-remainder-to'] === account.address) {
-						acc.amount += BigInt(tx['payment-transaction']?.['close-amount'] ?? 0);
-					}
-					return acc;
-				}, { amount: BigInt(0) });
+				} while (nextToken);
 
 				balancesList[account.address] = {
-					voiBalance: (genesisBalances[account.address]??BigInt(0)) + snapshot.amount,
+					voiBalance: (genesisBalances[account.address]??BigInt(0)) + balance,
 					viaBalance: BigInt(0),
 				};
 			}
@@ -334,5 +328,13 @@ function getAllTransactions(txns) {
 
 	console.log(`Undistributed VOI: ${undistributedVOI}`);
 	console.log(`Undistributed VIA: ${undistributedVIA}`);
+
+	if (skipList.length > 0) {
+		console.log('');
+		console.log(`Skipped ${skipList.length} accounts with more than 100,000 transactions:`);
+		for (const account of skipList) {
+			console.log(` ${account}`);
+		}
+	}
   
 })();
