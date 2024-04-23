@@ -169,7 +169,7 @@ function getAllTransactions(txns) {
 				continue;
 			}
 
-			console.log(`Retrieving balance for ${account.address}`);
+			process.stdout.write(`Retrieving balance for ${account.address}`);
 
 			if (checkRound == null) {
 				// get the balance of the account at the current round
@@ -192,6 +192,7 @@ function getAllTransactions(txns) {
 
 				do {
 					numIterations++;
+					process.stdout.write('.');
 
 					const transactions = await indexer.searchForTransactions()
 						.address(account.address)
@@ -214,12 +215,14 @@ function getAllTransactions(txns) {
 
 					nextToken = transactions['next-token'];
 
-					if (acct == null && numIterations > 1000) {
+					if (acct == null && numIterations > 100) {
+						console.log('');
 						console.log(`Account ${account.address} has more than ${numIterations * 1000} transactions at round ${checkRound}`);
 						skipList.push(account.address);
 						break;
 					}
 				} while (nextToken);
+				console.log('');
 
 				balancesList[account.address] = {
 					voiBalance: (genesisBalances[account.address]??BigInt(0)) + balance,
@@ -315,6 +318,17 @@ function getAllTransactions(txns) {
 		totalBalance: (voiBalance + viaBalance).toString(),
 		notes: JSON.stringify({ voi: (Number(voiBalance)/decimalDivisor), via: (Number(viaBalance)/decimalDivisor), total: (Number(voiBalance + viaBalance)/decimalDivisor) }),
 	}));
+
+	// create a new array with only the skipped accounts and output to balances_skipped.csv
+	const skippedBalances = sortedBalancesArray.filter(({ account }) => skipList.includes(account));
+	await writeToCSV(skippedBalances, 'balances_skipped.csv');
+
+	// if an account is in skipList, change the voiBalance to 0
+	for (const account of skipList) {
+		const index = sortedBalancesArray.findIndex(({ account: addr }) => addr === account);
+		sortedBalancesArray[index].voiBalance = '0';
+		sortedBalancesArray[index].totalBalance = sortedBalancesArray[index].viaBalance;
+	}
 
 	// write sortedBalancesArray to CSV
 	await writeToCSV(sortedBalancesArray,'balances.csv');
