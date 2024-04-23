@@ -319,10 +319,6 @@ function getAllTransactions(txns) {
 		notes: JSON.stringify({ voi: (Number(voiBalance)/decimalDivisor), via: (Number(viaBalance)/decimalDivisor), total: (Number(voiBalance + viaBalance)/decimalDivisor) }),
 	}));
 
-	// create a new array with only the skipped accounts and output to balances_skipped.csv
-	const skippedBalances = sortedBalancesArray.filter(({ account }) => skipList.includes(account));
-	await writeToCSV(skippedBalances, 'balances_skipped.csv');
-
 	// if an account is in skipList, change the voiBalance to 0
 	for (const account of skipList) {
 		const index = sortedBalancesArray.findIndex(({ account: addr }) => addr === account);
@@ -332,6 +328,10 @@ function getAllTransactions(txns) {
 
 	// write sortedBalancesArray to CSV
 	await writeToCSV(sortedBalancesArray,'balances.csv');
+
+	// create a new array with only the skipped accounts and output to balances_skipped.csv
+	const skippedBalances = sortedBalancesArray.filter(({ account }) => skipList.includes(account));
+	await writeToCSV(skippedBalances, 'balances_skipped.csv');
 
 	console.log(`Total VOI: ${voiTotal}`);
 	console.log(`Total VIA: ${viaTotal}`);
