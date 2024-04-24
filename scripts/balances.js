@@ -198,10 +198,12 @@ function getAllTransactions(txns) {
 						.address(account.address)
 						.maxRound(Number(checkRound))
 						.nextToken(nextToken)
-						.limit(1000)
+						.limit(500)
 						.do();
 
-					for (const tx of transactions.transactions) {
+					const txns = getAllTransactions(transactions.transactions);
+
+					for (const tx of txns) {
 						if (tx['sender'] === account.address) {
 							balance -= BigInt(tx['payment-transaction']?.amount ?? 0) + BigInt(tx['fee'] ?? 0);
 						}
@@ -215,9 +217,9 @@ function getAllTransactions(txns) {
 
 					nextToken = transactions['next-token'];
 
-					if (acct == null && numIterations > 100) {
+					if (acct == null && numIterations > 200) {
 						console.log('');
-						console.log(`Account ${account.address} has more than ${numIterations * 1000} transactions at round ${checkRound}`);
+						console.log(`Account ${account.address} has more than ${numIterations * 500} transactions at round ${checkRound}`);
 						skipList.push(account.address);
 						break;
 					}
