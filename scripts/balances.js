@@ -312,7 +312,7 @@ function getAllTransactions(txns) {
 	const zeroBalance = sortedBalances.splice(zeroIndex, 1);
 
 	// convert sortedBalances to an array of objects
-	const sortedBalancesArray = sortedBalances.map(([account, { voiBalance, viaBalance }]) => ({
+	let sortedBalancesArray = sortedBalances.map(([account, { voiBalance, viaBalance }]) => ({
 		account,
 		userType: 'snapshot',
 		voiBalance: voiBalance.toString(),
@@ -326,14 +326,18 @@ function getAllTransactions(txns) {
 		const index = sortedBalancesArray.findIndex(({ account: addr }) => addr === account);
 		sortedBalancesArray[index].voiBalance = '0';
 		sortedBalancesArray[index].totalBalance = sortedBalancesArray[index].viaBalance;
+		sortedBalancesArray[index].notes = JSON.stringify({ voi: 0, via: (Number(sortedBalancesArray[index].viaBalance)/decimalDivisor), total: (Number(sortedBalancesArray[index].viaBalance)/decimalDivisor) });
 	}
-
-	// write sortedBalancesArray to CSV
-	await writeToCSV(sortedBalancesArray,'balances.csv');
 
 	// create a new array with only the skipped accounts and output to balances_skipped.csv
 	const skippedBalances = sortedBalancesArray.filter(({ account }) => skipList.includes(account));
 	await writeToCSV(skippedBalances, 'balances_skipped.csv');
+
+	// remove skippedBalances accounts from sortedBalancesArray
+	sortedBalancesArray = sortedBalancesArray.filter(({ account }) => !skipList.includes(account));
+
+	// write sortedBalancesArray to CSV
+	await writeToCSV(sortedBalancesArray,'balances.csv');
 
 	console.log(`Total VOI: ${voiTotal}`);
 	console.log(`Total VIA: ${viaTotal}`);
