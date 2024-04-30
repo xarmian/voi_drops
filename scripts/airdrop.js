@@ -100,6 +100,7 @@ const transferTokens = async (sender,array, successStream, errorStream, groupSiz
                     const txn = algosdk.makePaymentTxnWithSuggestedParams(sender.addr, obj.account, parseInt(obj.tokenAmount), undefined, enc.encode(obj.note || note),params);
                     // Using the receiver transaction as a lease
                     // This prevents the airdrop script from sending a rewards payment twice in a 1000 round range
+                    // The SuggestedParam value of 1000 rounds is defined by MaxTxnLife in https://github.com/algorand/go-algorand/blob/master/config/consensus.go
                     txn.lease = algosdk.decodeAddress(obj.account).publicKey;
 
                     txGroup.push(txn);
