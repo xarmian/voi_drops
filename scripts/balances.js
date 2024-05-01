@@ -284,6 +284,11 @@ function getAllTransactions(txns) {
 		balancesList[account].viaBalance = amount;
 	}
 
+	// remove blacklist accounts from balancesList
+	for (const account of blacklist) {
+		delete balancesList[account];
+	}
+
 	// sort balancesList by sum of viaBalance and voiBalance
 	const sortedBalances = Object.entries(balancesList).sort((a, b) => {
 		const sumA = a[1].voiBalance + a[1].viaBalance;
